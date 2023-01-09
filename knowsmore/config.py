@@ -86,7 +86,6 @@ class Configuration(object):
 {G}KnowsMore {D}v%s{W}{G} by Helvio Junior{W}
 {W}{D}Active Directory, BloodHound, NTDS hashes and Password Cracks correlation tool{W}
 {C}{D}https://github.com/helviojunior/knowsmore{W}
-
     ''' % Configuration.version
 
 
