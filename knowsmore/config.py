@@ -61,7 +61,8 @@ class Configuration(object):
         module = args.get_module()
 
         if module is None:
-            Configuration.mandatory()
+            Color.pl('{!} {R}error: missing a mandatory option, use -h help{W}\r\n')
+            exit(1)
 
         Configuration.verbose = args.args.v
 

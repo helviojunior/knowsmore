@@ -42,7 +42,7 @@ class Tools:
     @staticmethod
     def mandatory():
         Color.pl('{!} {R}error: missing a mandatory option, use -h help{W}\r\n')
-        Tools.exit_gracefully(0)
+        Tools.exit_gracefully(1)
 
     @staticmethod
     def exit_gracefully(code=0):
