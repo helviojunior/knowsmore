@@ -4,243 +4,194 @@
 import sys, os.path
 import sqlite3
 import string, base64
-from sqlite3 import Connection
+from sqlite3 import Connection, OperationalError, IntegrityError, ProgrammingError
 
 from .color import Color
 from ..password import Password
 
 
+# TODO: use this decorator to wrap commit/rollback in a try/except block ?
+# see http://www.kylev.com/2009/05/22/python-decorators-and-database-idioms/
+def connect(func):
+    """Decorator to (re)open a sqlite database connection when needed.
+
+    A database connection must be open when we want to perform a database query
+    but we are in one of the following situations:
+    1) there is no connection
+    2) the connection is closed
+
+    Parameters
+    ----------
+    func : function
+        function which performs the database query
+
+    Returns
+    -------
+    inner func : function
+    """
+
+    def inner_func(self, *args, **kwargs):
+        if f'{func.__module__}.{func.__qualname__}' != f'{Database.__module__}.{Database.__qualname__}.{func.__name__}':
+            raise Exception('The connect decorator cannot be used outside of Database class')
+
+        #print(self)
+        #print('Arguments for args: {}'.format(args))
+        #print('Arguments for kwargs: {}'.format(kwargs))
+
+        if not isinstance(self, Database):
+            raise Exception('The connect decorator cannot be used outside of Database class')
+
+        conn = kwargs.get('conn', None) if kwargs is not None else None
+        try:
+            # I don't know if this is the simplest and fastest query to try
+            conn.execute(
+                'SELECT name FROM sqlite_temp_master WHERE type="table";')
+            pass
+        except (AttributeError, ProgrammingError):
+            conn = self.connect_to_db()
+            pass
+
+        #nargs = tuple([conn]) + args
+        #kwargs.update({'conn': conn})
+
+        return func(self, conn, *args, **kwargs)
+
+    return inner_func
+
 class Database(object):
-    dbName = ""
+    db_name = ""
 
     def __init__(self, auto_create=True, db_name=None):
 
-        if db_name is None:
-            self.dbName = "knowsmore.db"
-        else:
-            self.dbName = db_name
+        self.db_name = db_name
 
-        if not os.path.isfile(self.dbName):
+        if not os.path.isfile(self.db_name):
             if auto_create:
-                self.createDB()
+                self.create_db()
             else:
                 raise Exception("Database not found")
 
-    def hasData(self):
-        conn = sqlite3.connect(self.dbName)
-        cursor = conn.cursor()
+    def connect_to_db(self):
+        """Connect to a sqlite DB. Create the database if there isn't one yet.
 
-        cursor.execute("""
-        select count(*) as cnt from [credentials];
-        """)
+        Open a connection to a SQLite DB (either a DB file or an in-memory DB).
+        When a database is accessed by multiple connections, and one of the
+        processes modifies the database, the SQLite database is locked until that
+        transaction is committed.
 
-        data = cursor.fetchall()
-        if data:
-            return int(data[0][0]) > 0
+        Parameters
+        ----------
+        db : str
+            database name (without .db extension). If None, create an In-Memory DB.
 
-        conn.close()
+        Returns
+        -------
+        connection : sqlite3.Connection
+            connection object
+        """
+        return sqlite3.connect(self.db_name)
 
-        return False
-
-    def get_connection(self):
-        return sqlite3.connect(self.dbName)
-
-    def checkOpen(self):
-        conn = sqlite3.connect(self.dbName)
-        cursor = conn.cursor()
-
-        cursor.execute("""
-        select count(*) as cnt from [credentials];
-        """)
-
-        conn.close()
-
-    def insert_group(self, domain: int, object_identifier: str, name: str, dn: str = '', members: str = '', membership: str = '') -> int:
-
-        if domain is -1:
-            raise Exception('Invalid domain')
-
-        if object_identifier is None or object_identifier.strip() == '':
-            raise Exception('object_identifier cannot be empty')
-
-        conn = sqlite3.connect(self.dbName)
-        cursor = conn.cursor()
-
-        cursor.execute("""
-        insert or ignore into [groups](domain_id, name, object_identifier, dn, members, membership) values (?, ?, ?, ?, ?, ?);
-            """, (domain, name, object_identifier, dn, members, membership,))
-
-        conn.commit()
-        conn.close()
-
-    def update_password(self, password: Password):
-        try:
-            conn = sqlite3.connect(self.dbName)
-            cursor = conn.cursor()
-
-            cursor.execute("""
-                            update [passwords] set 
-                            password = ?
-                            , length = ?
-                            , upper = ?
-                            , lower = ?
-                            , digit = ?
-                            , special = ?
-                            , latin = ?
-                            WHERE password = '' and ntlm_hash = ?;
-                            """,
-                           (password.clear_text,
-                            password.length,
-                            password.upper,
-                            password.lower,
-                            password.digit,
-                            password.special,
-                            password.latin,
-                            password.ntlm_hash,
-                            ))
-
-            conn.commit()
-
-            conn.close()
-
-        except Exception as e:
-            Color.pl('{!} {R}Error inserting data:{O} %s{W}' % str(e))
-        pass
-
-    def insert_credential(self, domain: int, username: str, ntlm_hash: str, type: str = 'U'):
-        try:
-            conn = sqlite3.connect(self.dbName)
-            cursor = conn.cursor()
-
-            password_id = self.get_password_by_hash(domain, ntlm_hash, conn=conn)
-
-            if password_id == -1:
-                cursor.execute("""
-                insert or ignore into [passwords] ([domain_id], [ntlm_hash])
-                VALUES (?,?);
-                """, (domain, ntlm_hash,))
-
-                conn.commit()
-
-            password_id = self.get_password_by_hash(domain, ntlm_hash, conn=conn)
-
-            if password_id == -1:
-                raise Exception('Password not found at database')
-
-            # Create default empty password hash
-            if ntlm_hash == '31d6cfe0d16ae931b73c59d7e0c089c0':
-                pwd = Password(
-                    ntlm_hash='31d6cfe0d16ae931b73c59d7e0c089c0',
-                    clear_text=''
-                )
-                pwd.clear_text = '(empty)'
-                self.update_password(pwd)
-
-            cursor.execute("""
-                insert or ignore into [credentials] ([domain_id], [name], [password_id], [type])
-                VALUES (?,?,?,?);
-                """, (domain, username, password_id, type,))
-
-            conn.commit()
-
-            conn.close()
-
-        except Exception as e:
-            Color.pl('{!} {R}Error inserting data:{O} %s{W}' % str(e))
-        pass
-
-    def insert_or_get_domain(self, domain: str, dn: str = '', object_identifier: str = '') -> int:
-
-        if domain is None or domain.strip() == '':
-            raise Exception('Domain cannot be empty')
-
-        domain = domain.lower()
-        dn = '' if dn is None else dn.lower()
-        object_identifier = '' if object_identifier is None else object_identifier.strip()
-        domain_id = self.get_domain(domain)
-
-        conn = sqlite3.connect(self.dbName)
-        cursor = conn.cursor()
-
-        if domain_id == -1:
-            cursor.execute("""
-            insert or ignore into [domains](name, dn, object_identifier) values (?, ?, ?);
-                """, (domain, dn, object_identifier,))
-        else:
-            cursor.execute("""
-            update [domains] set dn = ?, object_identifier = ? where domain_id = ?;
-                """, (dn, object_identifier, domain_id,))
-
-        conn.commit()
-        conn.close()
-
-        domain_id = self.get_domain(domain)
-
-        return domain_id
-
-    def get_domain(self, domain: str) -> int:
-
-        conn = sqlite3.connect(self.dbName)
-        cursor = conn.cursor()
-
-        cursor.execute("""
-        select domain_id from [domains] where [name] = ?;
-            """, (domain,))
-
-        domain_id = -1
-        data = cursor.fetchall()
-        if data:
-            domain_id = data[0][0]
-
-        conn.close()
-
-        return domain_id
-
-    def get_domain_by_sid(self, sid: str) -> int:
-
-        conn = sqlite3.connect(self.dbName)
-        cursor = conn.cursor()
-
-        cursor.execute("""
-        select domain_id from [domains] where [object_identifier] = ? and  [object_identifier] <> '';
-            """, (sid,))
-
-        domain_id = -1
-        data = cursor.fetchall()
-        if data:
-            domain_id = data[0][0]
-
-        conn.close()
-
-        return domain_id
-
-    def get_password_by_hash(self, domain: int, ntlm_hash: str, conn: Connection = None) -> int:
-
-        close = True
+    def disconnect_from_db(self, conn):
         if conn is not None:
-            close = False
-            conn = sqlite3.connect(self.dbName)
-
-        cursor = conn.cursor()
-
-        cursor.execute("""
-        select password_id from [passwords] where [domain_id] = ? and [ntlm_hash] = ?;
-            """, (domain, ntlm_hash,))
-
-        password_id = -1
-        data = cursor.fetchall()
-        if data:
-            password_id = data[0][0]
-
-        if close:
             conn.close()
 
-        return password_id
+    def scrub(self, input_string):
+        """Clean an input string (to prevent SQL injection).
+
+        Parameters
+        ----------
+        input_string : str
+
+        Returns
+        -------
+        str
+        """
+        return ''.join(k for k in input_string if k.isalnum() or k in '_-')
+    @connect
+    def insert_one(self, conn, table_name, **kwargs):
+        table_name = self.scrub(table_name)
+        (columns, values) = self.parse_args(kwargs)
+        sql = "INSERT INTO {} ({}) VALUES ({})" \
+            .format(table_name, ','.join(columns), ', '.join(['?'] * len(columns)))
+        conn.execute(sql, values)
+        conn.commit()
+    @connect
+    def insert_ignore_one(self, conn, table_name, **kwargs):
+        table_name = self.scrub(table_name)
+        (columns, values) = self.parse_args(kwargs)
+        sql = "INSERT OR IGNORE INTO {} ({}) VALUES ({})" \
+            .format(table_name, ','.join(columns), ', '.join(['?'] * len(columns)))
+        conn.execute(sql, values)
+        conn.commit()
+
+    @connect
+    def select(self, conn, table_name, **kwargs):
+        table_name = self.scrub(table_name)
+        (columns, values) = self.parse_args(kwargs)
+
+        sql = f"SELECT * FROM {table_name}"
+        if len(columns) > 0:
+            sql += " WHERE {}".format(' and '.join([f'{col} = ?' for col in columns]))
+        cursor = conn.execute(sql, values)
+
+        columns = cursor.description
+        return [{columns[index][0]: column for index, column in enumerate(value)} for value in cursor.fetchall()]
+
+    def select_first(self, table_name, **kwargs):
+        data = self.select(table_name, **kwargs)
+        if len(data) == 0:
+            return None
+        return data[0]
+
+    @connect
+    def select_count(self, conn, table_name, **kwargs) -> int:
+        table_name = self.scrub(table_name)
+        (columns, values) = self.parse_args(kwargs)
+
+        sql = f"SELECT count(*) FROM {table_name}"
+        if len(columns) > 0:
+            sql += " WHERE {}".format(', '.join([f'{col} = ?' for col in columns]))
+        cursor = conn.execute(sql, values)
+        data = cursor.fetchone()
+
+        return int(data[0])
+
+    @connect
+    def update(self, conn, table_name, filter_data, **kwargs):
+        table_name = self.scrub(table_name)
+        (f_columns, f_values) = self.parse_args(filter_data)
+        (u_columns, u_values) = self.parse_args(kwargs)
+
+        sql = f"UPDATE {table_name} SET "
+        sql += "{}".format(', '.join([f'{col} = ?' for col in u_columns]))
+        if len(f_columns) > 0:
+            sql += " WHERE {}".format(' and '.join([f'{col} = ?' for col in f_columns]))
+        conn.execute(sql, tuple(u_values + f_values,))
+        conn.commit()
+
+    def parse_args(self, source_dict) -> tuple:
+        if source_dict is None:
+            return [], tuple([])
+
+        if not isinstance(source_dict, dict):
+            raise Exception('kwargs is not a dictionary')
+
+        columns = []
+        values = []
+
+        for key, value in source_dict.items():
+            try:
+                columns.append(f"[{self.scrub(key)}]")
+                values.append(value)
+            except Exception as e:
+                raise Exception(f'Error parsing {key}: {value}', e)
+
+        return columns, tuple(values,)
 
 
-    def createDB(self):
-        # conectando...
-        conn = sqlite3.connect(self.dbName)
+    @connect
+    def create_db(self, conn):
+
         # definindo um cursor
         cursor = conn.cursor()
 
@@ -315,5 +266,4 @@ class Database(object):
         #print('DB criado com sucesso.')
         # desconectando...
         conn.close()
-
 

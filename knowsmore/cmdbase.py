@@ -13,6 +13,7 @@ from pathlib import Path
 from knowsmore.module import Module
 from knowsmore.util.color import Color
 from knowsmore.util.database import Database
+from knowsmore.util.knowsmoredb import KnowsMoreDB
 from knowsmore.util.logger import Logger
 
 
@@ -77,7 +78,7 @@ class CmdBase(object):
         except Exception as e:
             raise Exception('Error listing command modules', e)
 
-    def open_db(self, args: Namespace, check: bool = False) -> Database:
+    def open_db(self, args: Namespace, check: bool = False) -> KnowsMoreDB:
         db_name = os.path.abspath(args.dbfile.strip())
 
         if not os.path.isfile(db_name):
@@ -85,22 +86,21 @@ class CmdBase(object):
             exit(1)
 
         try:
-            db = Database(auto_create=False,
-                          db_name=db_name)
+            db = KnowsMoreDB(auto_create=False,
+                             db_name=db_name)
 
             if check:
-                db.checkOpen()
+                db.check_open()
 
             return db
 
         except sqlite3.OperationalError as e:
+            print(e)
             Logger.pl(
                 '{!} {R}error: the database file exists but is not an SQLite or table structure was not created. Use parameter {O}--create-db{R} command to create.{W}\r\n')
             exit(1)
         except Exception as e:
-            Logger.pl(
-                '{!} {R}error: {O}%s{W}\r\n' % str(e))
-            exit(1)
+            raise e
 
     def print_verbose(self, text: str, min_level: int = 1):
         if self.verbose <= min_level:

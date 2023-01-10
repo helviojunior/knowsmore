@@ -91,7 +91,8 @@ class Bloodhound(CmdBase):
                                 files[2] = f
 
                         for f in files:
-                            self.parse_file(str(f))
+                            if f is not None and f.strip() != '':
+                                self.parse_file(str(f))
 
                     finally:
                         shutil.rmtree(tmpdirname)
@@ -153,11 +154,11 @@ class Bloodhound(CmdBase):
                         raise Exception('Unsupported BloodHound Version')
 
                 # groups
-                elif type.lower() == "groups111":
+                elif type.lower() == "groups":
                     groups = {}
 
                     if str(version) == "4":
-                        Color.pl('{?} {W}{D}importing groups...{W}')
+                        Color.pl('{?} {W}{D}loading groups...{W}')
                         data = json_data.get('data', [])
                         for didx, dd in enumerate(data):
                             p = int(((didx + 1) / qty) * 100)
@@ -233,9 +234,9 @@ class Bloodhound(CmdBase):
                             print(("Inserting [%s/%s => %s%%]" % (idx + 1, cnt, p)), end='\r', flush=True)
                             self.db.insert_group(
                                 domain=groups[g]['domain_id'],
-                                object_identifier=groups[g]['object_identifier'],
+                                object_identifier=groups[g].get('object_identifier', '') if groups[g].get('object_identifier', None) is not None else '',
                                 name=groups[g]['name'],
-                                dn=groups[g]['dn'],
+                                dn=groups[g].get('dn', '') if groups[g].get('dn', None) is not None else '',
                                 members=json.dumps(groups[g]['json_members']),
                                 membership=','.join(groups[g]['membership'])
                             )
@@ -247,30 +248,24 @@ class Bloodhound(CmdBase):
                         Color.pl('{?} {W}{D}loading groups from db...{W}' + ' ' * 50)
                         user_groups = {}
                         groups = {}
-                        conn = self.db.get_connection()
-                        cursor = conn.cursor()
-                        cursor.execute("""
-                                select object_identifier, members, membership, name from [groups];
-                                """)
-                        data = cursor.fetchall()
-                        if data:
-                            for row in data:
-                                gid = row[0]
-                                members = json.loads(row[1])
-                                for g in members:
-                                    t = g['ObjectType']
-                                    oid = g['ObjectIdentifier']
-                                    if t == "User":
-                                        ug = user_groups.get(oid, [])
-                                        ug.append(gid)
-                                        user_groups[oid] = ug
 
-                                groups[gid] = {
-                                    'name':  row[3],
-                                    'membership': row[2].split(',')
-                                }
+                        db_groups = self.db.select('groups')
 
-                        conn.close()
+                        for row in db_groups:
+                            gid = row['group_id']
+                            members = json.loads(row['members'])
+                            for g in members:
+                                t = g['ObjectType']
+                                oid = g['ObjectIdentifier']
+                                if t == "User":
+                                    ug = user_groups.get(oid, [])
+                                    ug.append(gid)
+                                    user_groups[oid] = ug
+
+                            groups[gid] = {
+                                'name':  row['name'],
+                                'membership': row['membership'].split(',')
+                            }
 
                         def get_user_groups(userId):
                             ug = user_groups.get(userId, [])
@@ -314,6 +309,7 @@ class Bloodhound(CmdBase):
                             self.db.insert_credential(
                                 domain=domain_id,
                                 username=name,
+                                dn=dn,
                                 ntlm_hash='31d6cfe0d16ae931b73c59d7e0c089c0',
                                 type='U')
 
@@ -333,19 +329,12 @@ class Bloodhound(CmdBase):
         domain_name = domain_name.lower()
         domain_sid = properties.get('domainsid', '')
 
-        domain_id = self.db.get_domain_by_sid(domain_sid)
+        domain_id = self.db.insert_or_get_domain(
+            domain=domain_name,
+            object_identifier=domain_sid
+        )
 
         if domain_id == -1:
-            self.db.insert_or_get_domain(
-                domain=domain_name,
-                object_identifier=domain_sid)
-            domain_id = self.db.get_domain_by_sid(domain_sid)
-
-        if domain_id == -1:
-            domain_id = self.db.get_domain(domain_name)
-
-        if domain_id == -1:
-            print(domain_name)
             raise Exception('Unable to get/create domain from JSON: %s' % json.dumps(properties))
 
         return domain_id

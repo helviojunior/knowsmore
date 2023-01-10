@@ -6,6 +6,7 @@ from argparse import _ArgumentGroup, Namespace
 from knowsmore.cmdbase import CmdBase
 from knowsmore.util.color import Color
 from knowsmore.util.database import Database
+from knowsmore.util.knowsmoredb import KnowsMoreDB
 from knowsmore.util.logger import Logger
 
 
@@ -31,27 +32,26 @@ class CreateDb(CmdBase):
         if args.dbfile is None or args.dbfile.strip() == '':
             Logger.pl('{!} {R}error: filename is invalid {O}%s{R} {W}\r\n' % (
                 args.db))
-            Tools.exit_gracefully(1)
+            exit(1)
 
         self.db_name = os.path.abspath(args.dbfile.strip())
         self.force = args.force
 
         if os.path.isfile(self.db_name) and not self.force:
             try:
-                db = Database(auto_create=False,
-                              db_name=self.db_name)
+                db = KnowsMoreDB(auto_create=False,
+                                 db_name=self.db_name)
 
-                if db.hasData():
+                if db.has_data():
                     Logger.pl('{!} {R}error: database already has data, use parameter {O}--force{R} if you want to replace all data {W}\r\n')
-                    Tools.exit_gracefully(1)
+                    exit(1)
             except sqlite3.OperationalError as e:
+                print(e)
                 Logger.pl(
                     '{!} {R}error: the database file exists but is not an SQLite or table structure was not created. Use parameter {O}--force{R} if you want to replace all data {W}\r\n')
-                Tools.exit_gracefully(1)
+                exit(1)
             except Exception as e:
-                Logger.pl(
-                    '{!} {R}error: {O}%s{W}\r\n' % str(e))
-                Tools.exit_gracefully(1)
+                raise e
 
         return True
 
