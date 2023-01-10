@@ -52,6 +52,24 @@ class Database(object):
 
         conn.close()
 
+    def insert_group(self, domain: int, object_identifier: str, name: str, dn: str = '', membership: str = '') -> int:
+
+        if domain is -1:
+            raise Exception('Invalid domain')
+
+        if object_identifier is None or object_identifier.strip() == '':
+            raise Exception('object_identifier cannot be empty')
+
+        conn = sqlite3.connect(self.dbName)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+        insert or ignore into [groups](domain_id, name, object_identifier, dn, membership) values (?, ?, ?, ?, ?);
+            """, (domain, name, object_identifier, dn, membership,))
+
+        conn.commit()
+        conn.close()
+
     def update_password(self, password: Password):
         try:
             conn = sqlite3.connect(self.dbName)
@@ -128,25 +146,32 @@ class Database(object):
             Color.pl('{!} {R}Error inserting data:{O} %s{W}' % str(e))
         pass
 
-    def insert_or_get_domain(self, domain: str) -> int:
+    def insert_or_get_domain(self, domain: str, dn: str = '', object_identifier: str = '') -> int:
 
         if domain is None or domain.strip() == '':
             raise Exception('Domain cannot be empty')
 
+        domain = domain.lower()
+        dn = '' if dn is None else dn.lower()
+        object_identifier = '' if object_identifier is None else object_identifier.strip()
         domain_id = self.get_domain(domain)
 
+        conn = sqlite3.connect(self.dbName)
+        cursor = conn.cursor()
+
         if domain_id == -1:
-            conn = sqlite3.connect(self.dbName)
-            cursor = conn.cursor()
-
             cursor.execute("""
-            insert or ignore into [domains](name) values (?);
-                """, (domain,))
+            insert or ignore into [domains](name, dn, object_identifier) values (?, ?, ?);
+                """, (domain, dn, object_identifier,))
+        else:
+            cursor.execute("""
+            update [domains] set dn = ?, object_identifier = ? where domain_id = ?;
+                """, (dn, object_identifier, domain_id,))
 
-            conn.commit()
-            conn.close()
+        conn.commit()
+        conn.close()
 
-            domain_id = self.get_domain(domain)
+        domain_id = self.get_domain(domain)
 
         return domain_id
 
@@ -158,6 +183,24 @@ class Database(object):
         cursor.execute("""
         select domain_id from [domains] where [name] = ?;
             """, (domain,))
+
+        domain_id = -1
+        data = cursor.fetchall()
+        if data:
+            domain_id = data[0][0]
+
+        conn.close()
+
+        return domain_id
+
+    def get_domain_by_sid(self, sid: str) -> int:
+
+        conn = sqlite3.connect(self.dbName)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+        select domain_id from [domains] where [object_identifier] = ? and  [object_identifier] <> '';
+            """, (sid,))
 
         domain_id = -1
         data = cursor.fetchall()
@@ -203,6 +246,8 @@ class Database(object):
             CREATE TABLE IF NOT EXISTS [domains] (
                 domain_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
+                object_identifier TEXT NOT NULL DEFAULT(''),
+                dn TEXT NOT NULL DEFAULT(''),
                 UNIQUE(name)
             );
         """)
@@ -228,15 +273,30 @@ class Database(object):
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS [credentials] (
-                id varchar(500),
+                credential_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 domain_id INTEGER NOT NULL,
                 type varchar(1) NOT NULL  DEFAULT('U'),
                 name varchar(500) NOT NULL,
+                object_identifier TEXT NOT NULL DEFAULT(''),
                 password_id INTEGER NOT NULL,
                 insert_date datetime not null DEFAULT (datetime('now','localtime')),
                 FOREIGN KEY(domain_id) REFERENCES domains(domain_id),
                 FOREIGN KEY(password_id) REFERENCES passwords(password_id),
                 UNIQUE(domain_id, name)
+            );
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS [groups] (
+                group_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                domain_id INTEGER NOT NULL,
+                name varchar(500) NOT NULL,
+                object_identifier TEXT NOT NULL,
+                dn TEXT NOT NULL,
+                members TEXT NOT NULL DEFAULT(''),
+                membership TEXT NOT NULL DEFAULT(''),
+                FOREIGN KEY(domain_id) REFERENCES domains(domain_id),
+                UNIQUE(name, object_identifier)
             );
         """)
 

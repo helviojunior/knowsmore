@@ -2,7 +2,9 @@ import os
 import datetime
 import importlib
 import pkgutil
+import random
 import sqlite3
+import string
 import sys
 import traceback
 from argparse import _ArgumentGroup, ArgumentParser, Namespace
@@ -80,7 +82,7 @@ class CmdBase(object):
 
         if not os.path.isfile(db_name):
             Color.pl('{!} {R}error: database file not found {O}%s{R}{W}\r\n' % db_name)
-            Tools.exit_gracefully(1)
+            exit(1)
 
         try:
             db = Database(auto_create=False,
@@ -94,11 +96,11 @@ class CmdBase(object):
         except sqlite3.OperationalError as e:
             Logger.pl(
                 '{!} {R}error: the database file exists but is not an SQLite or table structure was not created. Use parameter {O}--create-db{R} command to create.{W}\r\n')
-            Tools.exit_gracefully(1)
+            exit(1)
         except Exception as e:
             Logger.pl(
                 '{!} {R}error: {O}%s{W}\r\n' % str(e))
-            Tools.exit_gracefully(1)
+            exit(1)
 
     def print_verbose(self, text: str, min_level: int = 1):
         if self.verbose <= min_level:
@@ -117,3 +119,17 @@ class CmdBase(object):
 
     def run(self):
         raise Exception('Method "run" is not yet implemented.')
+    def get_temp_directory(self) -> Path:
+        path = os.path.join(
+            os.getcwd(),
+            ''.join(random.choice(string.ascii_lowercase + string.ascii_uppercase) for i in range(20))
+        )
+        p = Path(path)
+        p.mkdir(parents=True, exist_ok=True)
+
+        return p
+
+    def get_files(self, path):
+        for file in os.listdir(path):
+            if os.path.isfile(os.path.join(path, file)):
+                yield os.path.join(path, file)
