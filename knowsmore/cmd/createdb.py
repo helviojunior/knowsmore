@@ -31,7 +31,7 @@ class CreateDb(CmdBase):
         if args.dbfile is None or args.dbfile.strip() == '':
             Logger.pl('{!} {R}error: filename is invalid {O}%s{R} {W}\r\n' % (
                 args.db))
-            exit(1)
+            Tools.exit_gracefully(1)
 
         self.db_name = os.path.abspath(args.dbfile.strip())
         self.force = args.force
@@ -43,15 +43,15 @@ class CreateDb(CmdBase):
 
                 if db.hasData():
                     Logger.pl('{!} {R}error: database already has data, use parameter {O}--force{R} if you want to replace all data {W}\r\n')
-                    exit(1)
+                    Tools.exit_gracefully(1)
             except sqlite3.OperationalError as e:
                 Logger.pl(
                     '{!} {R}error: the database file exists but is not an SQLite or table structure was not created. Use parameter {O}--force{R} if you want to replace all data {W}\r\n')
-                exit(1)
+                Tools.exit_gracefully(1)
             except Exception as e:
                 Logger.pl(
                     '{!} {R}error: {O}%s{W}\r\n' % str(e))
-                exit(1)
+                Tools.exit_gracefully(1)
 
         return True
 

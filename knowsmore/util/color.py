@@ -26,9 +26,11 @@ class Color(object):
     replacements = {
         '{+}': ' {W}{D}[{W}{G}+{W}{D}]{W}',
         '{!}': ' {O}[{R}!{O}]{W}',
-        '{?}': ' {W}[{C}?{W}]',
+        '{?}': ' {W}{D}[{W}{C}?{W}{D}]{W}',
         '{*}': ' {W}[{B}*{W}]'
     }
+
+
 
     last_sameline_length = 0
 

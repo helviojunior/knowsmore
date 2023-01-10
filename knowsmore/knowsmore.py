@@ -44,7 +44,7 @@ class KnowsMore(object):
 
         if missing_required:
             Color.pl('{!} {R}required app(s) were not found, exiting.{W}')
-            sys.exit(-1)
+            sys.Tools.exit_gracefully(-1)
 
         if missing_optional:
             Color.pl('{!} {O}recommended app(s) were not found')
@@ -107,7 +107,7 @@ def run():
     except KeyboardInterrupt:
         Color.pl('\n{!} {O}interrupted, shutting down...{W}')
 
-    Configuration.exit_gracefully(0)
+    Tools.exit_gracefully(2)
 
 if __name__ == '__main__':
     run()

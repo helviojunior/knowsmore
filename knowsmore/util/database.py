@@ -7,6 +7,8 @@ import string, base64
 from sqlite3 import Connection
 
 from .color import Color
+from ..password import Password
+
 
 class Database(object):
     dbName = ""
@@ -50,6 +52,40 @@ class Database(object):
 
         conn.close()
 
+    def update_password(self, password: Password):
+        try:
+            conn = sqlite3.connect(self.dbName)
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                            update [passwords] set 
+                            password = ?
+                            , length = ?
+                            , upper = ?
+                            , lower = ?
+                            , digit = ?
+                            , special = ?
+                            , latin = ?
+                            WHERE password = '' and ntlm_hash = ?;
+                            """,
+                           (password.clear_text,
+                            password.length,
+                            password.upper,
+                            password.lower,
+                            password.digit,
+                            password.special,
+                            password.latin,
+                            password.ntlm_hash,
+                            ))
+
+            conn.commit()
+
+            conn.close()
+
+        except Exception as e:
+            Color.pl('{!} {R}Error inserting data:{O} %s{W}' % str(e))
+        pass
+
     def insert_credential(self, domain: int, username: str, ntlm_hash: str, type: str = 'U'):
         try:
             conn = sqlite3.connect(self.dbName)
@@ -69,6 +105,15 @@ class Database(object):
 
             if password_id == -1:
                 raise Exception('Password not found at database')
+
+            # Create default empty password hash
+            if ntlm_hash == '31d6cfe0d16ae931b73c59d7e0c089c0':
+                pwd = Password(
+                    ntlm_hash='31d6cfe0d16ae931b73c59d7e0c089c0',
+                    clear_text=''
+                )
+                pwd.clear_text = '(empty)'
+                self.update_password(pwd)
 
             cursor.execute("""
                 insert or ignore into [credentials] ([domain_id], [name], [password_id], [type])
@@ -172,7 +217,9 @@ class Database(object):
                 length INTEGER NOT NULL DEFAULT(0),
                 upper INTEGER NOT NULL DEFAULT(0),
                 lower INTEGER NOT NULL DEFAULT(0),
+                digit INTEGER NOT NULL DEFAULT(0),
                 special INTEGER NOT NULL DEFAULT(0),
+                latin INTEGER NOT NULL DEFAULT(0),
                 company_variation INTEGER NOT NULL DEFAULT(0),
                 user_data_variation INTEGER NOT NULL DEFAULT(0),
                 UNIQUE(domain_id, ntlm_hash)
@@ -204,3 +251,5 @@ class Database(object):
         #print('DB criado com sucesso.')
         # desconectando...
         conn.close()
+
+

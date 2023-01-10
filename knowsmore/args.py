@@ -35,7 +35,7 @@ class Arguments(object):
 
         if len(selected_modules) > 1:
             Color.pl('{!} {R}error: missing a mandatory option, use -h help{W}\r\n')
-            exit(1)
+            Tools.exit_gracefully(1)
 
         mod = None
         if len(selected_modules) == 1:

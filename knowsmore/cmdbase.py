@@ -80,7 +80,7 @@ class CmdBase(object):
 
         if not os.path.isfile(db_name):
             Color.pl('{!} {R}error: database file not found {O}%s{R}{W}\r\n' % db_name)
-            exit(1)
+            Tools.exit_gracefully(1)
 
         try:
             db = Database(auto_create=False,
@@ -94,11 +94,11 @@ class CmdBase(object):
         except sqlite3.OperationalError as e:
             Logger.pl(
                 '{!} {R}error: the database file exists but is not an SQLite or table structure was not created. Use parameter {O}--create-db{R} command to create.{W}\r\n')
-            exit(1)
+            Tools.exit_gracefully(1)
         except Exception as e:
             Logger.pl(
                 '{!} {R}error: {O}%s{W}\r\n' % str(e))
-            exit(1)
+            Tools.exit_gracefully(1)
 
     def print_verbose(self, text: str, min_level: int = 1):
         if self.verbose <= min_level:

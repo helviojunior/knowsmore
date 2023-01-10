@@ -175,6 +175,11 @@ class Process(object):
                 return
             raise e  # process cannot be killed
 
+    @staticmethod
+    def kill(code=0):
+        ''' Deletes temp and exist with the given code '''
+
+        os.kill(os.getpid(),signal.SIGTERM)
 
 if __name__ == '__main__':
     p = Process('ls')

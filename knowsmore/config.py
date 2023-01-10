@@ -76,6 +76,8 @@ class Configuration(object):
 
         Configuration.module = module
 
+        Logger.pl('     {C}module:{O} %s{W}' % module.name)
+
         if module.check_database:
             Configuration.module.open_db(args=args.args, check=True)
 
@@ -91,25 +93,6 @@ class Configuration(object):
 {W}{D}Active Directory, BloodHound, NTDS hashes and Password Cracks correlation tool{W}
 {C}{D}https://github.com/helviojunior/knowsmore{W}
     ''' % Configuration.version
-
-
-    @staticmethod
-    def mandatory():
-        Color.pl('{!} {R}error: missing a mandatory option, use -h help{W}\r\n')
-        Configuration.exit_gracefully(0)
-
-    @staticmethod
-    def exit_gracefully(code=0):
-        ''' Deletes temp and exist with the given code '''
-
-        exit(code)
-
-
-    @staticmethod
-    def kill(code=0):
-        ''' Deletes temp and exist with the given code '''
-
-        os.kill(os.getpid(),signal.SIGTERM)
 
 
     @staticmethod

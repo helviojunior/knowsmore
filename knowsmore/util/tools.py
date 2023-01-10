@@ -3,6 +3,9 @@
 
 import string, random, sys, re
 
+from knowsmore.util.color import Color
+
+
 class Tools:
 
     def __init__(self):
@@ -26,3 +29,14 @@ class Tools:
             return True
         else:
             return False
+
+    @staticmethod
+    def mandatory():
+        Color.pl('{!} {R}error: missing a mandatory option, use -h help{W}\r\n')
+        Tools.exit_gracefully(0)
+
+    @staticmethod
+    def exit_gracefully(code=0):
+        exit(code)
+
+
