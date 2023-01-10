@@ -48,7 +48,7 @@ hashcat -m 1000 -a 3 -O --increment --increment-min 4 -o "~/Desktop/cracked.txt"
 ### importing hashcat output file
 
 ```bash
-knowsmore --ntlm-hash --import-cracked ~/Desktop/ntlm_hash.txt
+knowsmore --ntlm-hash --import-cracked ~/Desktop/cracked.txt
 ```
 
 ## Importing BloodHound files
