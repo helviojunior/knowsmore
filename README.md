@@ -55,10 +55,10 @@ knowsmore --ntlm-hash --import-cracked ~/Desktop/ntlm_hash.txt
 
 ```bash
 # Bloodhound ZIP File
-knowsmore --ntlm-hash --import-cracked ~/Desktop/client.zip
+knowsmore --bloodhound --import-data ~/Desktop/client.zip
 
 # Bloodhound JSON File
-knowsmore --ntlm-hash --import-cracked ~/Desktop/20220912105336_users.json
+knowsmore --bloodhound --import-data ~/Desktop/20220912105336_users.json
 ```
 
 **Note:** The KnowsMore is able to import BloodHound ZIP File and JSON (users, domains and groups) files
