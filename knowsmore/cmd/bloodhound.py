@@ -153,9 +153,8 @@ class Bloodhound(CmdBase):
                         raise Exception('Unsupported BloodHound Version')
 
                 # groups
-                elif type.lower() == "groups":
+                elif type.lower() == "groups111":
                     groups = {}
-                    user_groups = {}
 
                     if str(version) == "4":
                         Color.pl('{?} {W}{D}importing groups...{W}')
@@ -173,32 +172,15 @@ class Bloodhound(CmdBase):
 
                             name = properties.get('name', '@').split('@')[0]
                             dn = properties.get('distinguishedname', None)
-                            domain_name = properties.get('domain', None)
-                            if domain_name is None:
-                                properties.get('name', '@').split('@')[1].lower()
-                            domain_name = domain_name.lower()
-                            domain_sid = properties.get('domainsid', '')
 
-                            domain_id = self.db.get_domain_by_sid(domain_sid)
-
-                            if domain_id == -1:
-                                self.db.insert_or_get_domain(
-                                    domain=domain_name,
-                                    object_identifier=domain_sid)
-                                domain_id = self.db.get_domain_by_sid(domain_sid)
-
-                            if domain_id == -1:
-                                domain_id = self.db.get_domain(domain_name)
-
-                            if domain_id == -1:
-                                print(domain_name)
-                                raise Exception('Unable to get/create domain from JSON: %s' % json.dumps(dd))
+                            domain_id = self.get_domain(properties)
 
                             groups[gid] = {
                                 "name": name,
                                 "domain_id": domain_id,
                                 "object_identifier": gid,
                                 "dn": dn,
+                                "json_members": dd.get('Members', []),
                                 "members": [],
                                 "membership": []
                             }
@@ -206,14 +188,11 @@ class Bloodhound(CmdBase):
                             # Step 1
                             members = dd.get('Members', [])
                             for g in members:
-                                t = g['ObjectType']
+                                t = g.get('ObjectType', None)
                                 oid = g['ObjectIdentifier']
                                 if t == "Group":
                                     groups[gid]['members'].append(oid)
-                                elif t == "User":
-                                    ug = user_groups.get(oid, [])
-                                    ug.append(gid)
-                                    user_groups[oid] = ug
+
 
                     else:
                         raise Exception('Unsupported BloodHound Version')
@@ -247,7 +226,6 @@ class Bloodhound(CmdBase):
                             print(("Processing [%s/%s => %s%%]" % (idx + 1, cnt, p)), end='\r', flush=True)
                             groups[g]['membership'] = get_group_chain(g, [])
 
-                        print((" " * 180), end='\r', flush=True)
                         Color.pl('{?} {W}{D}inserting groups...{W}' + ' ' * 50)
                         for idx, g in enumerate(groups):
                             p = int(((idx + 1) / cnt) * 100)
@@ -258,11 +236,116 @@ class Bloodhound(CmdBase):
                                 object_identifier=groups[g]['object_identifier'],
                                 name=groups[g]['name'],
                                 dn=groups[g]['dn'],
+                                members=json.dumps(groups[g]['json_members']),
                                 membership=','.join(groups[g]['membership'])
                             )
+
+                #Users
+                elif type.lower() == "users":
+                    if str(version) == "4":
+
+                        Color.pl('{?} {W}{D}loading groups from db...{W}' + ' ' * 50)
+                        user_groups = {}
+                        groups = {}
+                        conn = self.db.get_connection()
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                                select object_identifier, members, membership, name from [groups];
+                                """)
+                        data = cursor.fetchall()
+                        if data:
+                            for row in data:
+                                gid = row[0]
+                                members = json.loads(row[1])
+                                for g in members:
+                                    t = g['ObjectType']
+                                    oid = g['ObjectIdentifier']
+                                    if t == "User":
+                                        ug = user_groups.get(oid, [])
+                                        ug.append(gid)
+                                        user_groups[oid] = ug
+
+                                groups[gid] = {
+                                    'name':  row[3],
+                                    'membership': row[2].split(',')
+                                }
+
+                        conn.close()
+
+                        def get_user_groups(userId):
+                            ug = user_groups.get(userId, [])
+                            gids = []
+                            for g in ug:
+                                tmp = groups[g]['membership']
+                                for t in tmp:
+                                    if t not in gids:
+                                        gids.append(t)
+
+                            group_names = []
+                            for g in gids:
+                                gname = groups.get(g, {}).get("name", None)
+                                if gname is not None:
+                                    group_names.append(gname)
+
+                            return ', '.join(group_names)
+
+                        Color.pl('{?} {W}{D}importing users...{W}' + ' ' * 50)
+                        data = json_data.get('data', [])
+                        for didx, dd in enumerate(data):
+                            p = int(((didx + 1) / qty) * 100)
+                            Tools.clear_line()
+                            print(("Processing [%s/%s => %s%%]" % (didx + 1, qty, p)), end='\r', flush=True)
+
+                            oid = dd.get('ObjectIdentifier', None)
+                            properties = dd.get('Properties', None)
+
+                            if oid is None or properties is None:
+                                raise Exception('Unable to parse user data 1: %s' % json.dumps(dd))
+
+                            name = properties.get('name', '@').split('@')[0].lower()
+                            dn = properties.get('distinguishedname', None)
+
+                            if name is None:
+                                raise Exception('Unable to parse user data 2: %s' % json.dumps(dd))
+
+                            domain_id = self.get_domain(properties)
+
+                            # Hard-coded empty password
+                            self.db.insert_credential(
+                                domain=domain_id,
+                                username=name,
+                                ntlm_hash='31d6cfe0d16ae931b73c59d7e0c089c0',
+                                type='U')
+
+                    else:
+                        raise Exception('Unsupported BloodHound Version')
 
 
         except KeyboardInterrupt as e:
             Tools.clear_line()
             print((" " * 180), end='\r', flush=True)
             raise e
+
+    def get_domain(self, properties):
+        domain_name = properties.get('domain', None)
+        if domain_name is None:
+            properties.get('name', '@').split('@')[1].lower()
+        domain_name = domain_name.lower()
+        domain_sid = properties.get('domainsid', '')
+
+        domain_id = self.db.get_domain_by_sid(domain_sid)
+
+        if domain_id == -1:
+            self.db.insert_or_get_domain(
+                domain=domain_name,
+                object_identifier=domain_sid)
+            domain_id = self.db.get_domain_by_sid(domain_sid)
+
+        if domain_id == -1:
+            domain_id = self.db.get_domain(domain_name)
+
+        if domain_id == -1:
+            print(domain_name)
+            raise Exception('Unable to get/create domain from JSON: %s' % json.dumps(properties))
+
+        return domain_id

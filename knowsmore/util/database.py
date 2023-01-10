@@ -42,6 +42,9 @@ class Database(object):
 
         return False
 
+    def get_connection(self):
+        return sqlite3.connect(self.dbName)
+
     def checkOpen(self):
         conn = sqlite3.connect(self.dbName)
         cursor = conn.cursor()
@@ -52,7 +55,7 @@ class Database(object):
 
         conn.close()
 
-    def insert_group(self, domain: int, object_identifier: str, name: str, dn: str = '', membership: str = '') -> int:
+    def insert_group(self, domain: int, object_identifier: str, name: str, dn: str = '', members: str = '', membership: str = '') -> int:
 
         if domain is -1:
             raise Exception('Invalid domain')
@@ -64,8 +67,8 @@ class Database(object):
         cursor = conn.cursor()
 
         cursor.execute("""
-        insert or ignore into [groups](domain_id, name, object_identifier, dn, membership) values (?, ?, ?, ?, ?);
-            """, (domain, name, object_identifier, dn, membership,))
+        insert or ignore into [groups](domain_id, name, object_identifier, dn, members, membership) values (?, ?, ?, ?, ?, ?);
+            """, (domain, name, object_identifier, dn, members, membership,))
 
         conn.commit()
         conn.close()
@@ -278,6 +281,7 @@ class Database(object):
                 type varchar(1) NOT NULL  DEFAULT('U'),
                 name varchar(500) NOT NULL,
                 object_identifier TEXT NOT NULL DEFAULT(''),
+                groups TEXT NOT NULL DEFAULT(''),
                 password_id INTEGER NOT NULL,
                 insert_date datetime not null DEFAULT (datetime('now','localtime')),
                 FOREIGN KEY(domain_id) REFERENCES domains(domain_id),
