@@ -5,6 +5,7 @@ import sqlite3
 import time
 from argparse import _ArgumentGroup, Namespace
 from enum import Enum
+from clint.textui import progress
 
 from knowsmore.cmdbase import CmdBase
 from knowsmore.password import Password
@@ -123,117 +124,114 @@ class NTLMHash(CmdBase):
 
             count = 0
             ignored = 0
-            try:
-                with open(self.filename, 'r', encoding="UTF-8", errors="surrogateescape") as f:
-                    line = f.readline()
-                    while line:
-                        count += 1
-                        line = line.lower()
-                        if line.endswith('\n'):
-                            line = line[:-1]
-                        if line.endswith('\r'):
-                            line = line[:-1]
 
-                        Tools.clear_line()
-                        print(("Processing [%d]" % count), end='\r', flush=True)
+            total = Tools.count_file_lines(self.filename)
 
-                        c1 = line.split(':')
-                        if len(c1) < min_col:
-                            ignored += 1
-                            continue
+            with progress.Bar(label="Processing ", expected_size=total) as bar:
+                try:
+                    with open(self.filename, 'r', encoding="UTF-8", errors="surrogateescape") as f:
+                        line = f.readline()
+                        while line:
+                            count += 1
+                            bar.show(count)
 
-                        f1 = c1[user_index]
-                        hash = c1[ntlm_hash_index]
+                            line = line.lower()
+                            if line.endswith('\n'):
+                                line = line[:-1]
+                            if line.endswith('\r'):
+                                line = line[:-1]
 
-                        if '\\' in f1:
-                            f1s = f1.strip().split('\\')
-                            domain = f1s[0].strip()
-                            usr = f1s[1].strip()
-                        else:
-                            domain = 'default'
-                            usr = f1.strip()
+                            c1 = line.split(':')
+                            if len(c1) < min_col:
+                                ignored += 1
+                                continue
 
-                        type = 'U'
+                            f1 = c1[user_index]
+                            hash = c1[ntlm_hash_index]
 
-                        if usr.endswith('$'):
-                            usr = usr[:-1]
-                            type = 'M'
+                            if '\\' in f1:
+                                f1s = f1.strip().split('\\')
+                                domain = f1s[0].strip()
+                                usr = f1s[1].strip()
+                            else:
+                                domain = 'default'
+                                usr = f1.strip()
 
-                        if domain == '' or usr == '' or hash == '':
-                            self.print_verbose(f'Line ignored: {line}')
+                            type = 'U'
 
-                        didx = self.db.insert_or_get_domain(domain)
-                        if didx == -1:
-                            Tools.clear_line()
-                            Logger.pl('{!} {R}error: Was not possible to import the domain {O}%s{R}\r\n' % domain)
-                            Tools.exit_gracefully(1)
+                            if usr.endswith('$'):
+                                usr = usr[:-1]
+                                type = 'M'
 
-                        self.db.insert_credential(
-                            domain=didx,
-                            username=usr,
-                            ntlm_hash=hash,
-                            type=type)
+                            if domain == '' or usr == '' or hash == '':
+                                self.print_verbose(f'Line ignored: {line}')
 
-                        try:
-                            line = f.readline()
-                        except:
-                            pass
+                            didx = self.db.insert_or_get_domain(domain)
+                            if didx == -1:
+                                Tools.clear_line()
+                                Logger.pl('{!} {R}error: Was not possible to import the domain {O}%s{R}\r\n' % domain)
+                                Tools.exit_gracefully(1)
 
-            except KeyboardInterrupt as e:
-                Tools.clear_line()
-                print((" " * 180), end='\r', flush=True)
-                Logger.pl("{!} {C}Interrupted by user{W}, loaded {O}%s{C} lines{W}" % count)
-                raise e
+                            self.db.insert_or_update_credential(
+                                domain=didx,
+                                username=usr,
+                                ntlm_hash=hash,
+                                type=type,
+                            )
 
-            Tools.clear_line()
-            print((" " * 180), end='\r', flush=True)
-            Logger.pl('{+} {C}Loaded {O}%s{W} lines' % count)
+                            try:
+                                line = f.readline()
+                            except:
+                                pass
+
+                except KeyboardInterrupt as e:
+                    raise e
+                finally:
+                    bar.hide = True
+                    Tools.clear_line()
+                    Logger.pl('{+} {C}Loaded {O}%s{W} lines' % count)
 
         elif self.mode == NTLMHash.ImportMode.Cracked:
             count = 0
             ignored = 0
-            try:
 
-                with open(self.filename, 'r', encoding="UTF-8", errors="surrogateescape") as f:
-                    line = f.readline()
-                    while line:
-                        count += 1
-                        if line.endswith('\n'):
-                            line = line[:-1]
-                        if line.endswith('\r'):
-                            line = line[:-1]
+            total = Tools.count_file_lines(self.filename)
+            with progress.Bar(label="Processing ", expected_size=total) as bar:
+                try:
+                    with open(self.filename, 'r', encoding="UTF-8", errors="surrogateescape") as f:
+                        line = f.readline()
+                        while line:
+                            count += 1
+                            bar.show(count)
 
-                        # line = ''.join(filter(Tools.permited_char, line)).strip()
+                            if line.endswith('\n'):
+                                line = line[:-1]
+                            if line.endswith('\r'):
+                                line = line[:-1]
 
-                        Tools.clear_line()
-                        print(("Processing [%d]" % count), end='\r', flush=True)
+                            c1 = line.split(':', maxsplit=1)
+                            if len(c1) != 2:
+                                ignored += 1
+                                continue
 
-                        c1 = line.split(':', maxsplit=1)
-                        if len(c1) != 2:
-                            ignored += 1
-                            continue
+                            password = Password(
+                                ntlm_hash=c1[0].lower(),
+                                clear_text=c1[1]
+                            )
 
-                        password = Password(
-                            ntlm_hash=c1[0].lower(),
-                            clear_text=c1[1]
-                        )
+                            self.db.update_password(password)
 
-                        self.db.update_password(password)
+                            try:
+                                line = f.readline()
+                            except:
+                                pass
 
-                        try:
-                            line = f.readline()
-                        except:
-                            pass
-
-            except KeyboardInterrupt as e:
-                Tools.clear_line()
-                print((" " * 180), end='\r', flush=True)
-                Logger.pl("{!} {C}Interrupted by user{W}, loaded {O}%s{C} lines{W}" % count)
-                raise e
-
-            Tools.clear_line()
-            print((" " * 180), end='\r', flush=True)
-            Logger.pl('{+} {C}Loaded {O}%s{W} lines' % count)
+                except KeyboardInterrupt as e:
+                    raise e
+                finally:
+                    bar.hide = True
+                    Tools.clear_line()
+                    Logger.pl('{+} {C}Loaded {O}%s{W} lines' % count)
 
     def get_ntds_columns(self):
         self.print_verbose('Getting file column design')

@@ -68,8 +68,16 @@ class KnowsMoreDB(Database):
                     latin=password.latin
                     )
 
-    def insert_credential(self, domain: int, username: str, ntlm_hash: str, type: str = 'U', dn: str = ''):
+    def insert_or_update_credential(self, domain: int, username: str, ntlm_hash: str,
+                                    dn: str = '', groups: str = '', object_identifier: str = '',
+                                    type: str = 'U'):
         try:
+
+            # Hard-coded empty password
+            update_password = True
+            if ntlm_hash is None or ntlm_hash.strip == '':
+                update_password = False
+                ntlm_hash = '31d6cfe0d16ae931b73c59d7e0c089c0'
 
             passwd = self.select_first('passwords', ntlm_hash=ntlm_hash)
             password_id = -1 if passwd is None else passwd['password_id']
@@ -83,12 +91,39 @@ class KnowsMoreDB(Database):
             if password_id == -1:
                 raise Exception('Password not found at database')
 
-            self.insert_ignore_one('credentials',
-                                   domain_id=domain,
-                                   name=username,
-                                   password_id=password_id,
-                                   type=type
-                                   )
+            cred = self.select_first('credentials',
+                                     domain_id=domain,
+                                     name=username,
+                                     type=type
+                                     )
+            cred_id = -1 if cred is None else cred['credential_id']
+
+            if cred_id == -1:
+                self.insert_ignore_one('credentials',
+                                       domain_id=domain,
+                                       name=username,
+                                       password_id=password_id,
+                                       dn=dn if dn is not None else '',
+                                       object_identifier=object_identifier if object_identifier is not None else '',
+                                       groups=groups if groups is not None else '',
+                                       type=type
+                                       )
+            else:
+                data = {
+                    'domain_id': domain,
+                    'name': username,
+                    'type': type
+                }
+                if dn is not None:
+                    data['dn'] = dn
+                if groups is not None:
+                    data['groups'] = groups
+                if object_identifier is not None:
+                    data['object_identifier'] = object_identifier
+                if update_password:
+                    data['password_id'] = password_id
+
+                self.update('credentials', {'credential_id': cred_id}, **data)
 
         except Exception as e:
             Color.pl('{!} {R}Error inserting credential data:{O} %s{W}' % str(e))
@@ -103,15 +138,15 @@ class KnowsMoreDB(Database):
         dn = '' if dn is None else dn.lower()
         object_identifier = '' if object_identifier is None else object_identifier.strip()
 
-        f = None
+        f = {
+            '__operator': 'or',
+            'name': domain.lower()
+        }
         if dn is not None and dn != '':
-            f = {'dn': dn}
+            f['dn'] = dn
 
         if f is None and object_identifier is not None and object_identifier != '':
-            f = {'object_identifier': object_identifier}
-
-        if f is None:
-            f = {'name': domain.lower()}
+            f['object_identifier'] = object_identifier
 
         domain_id = self.get_domain(**f)
 
@@ -119,9 +154,11 @@ class KnowsMoreDB(Database):
             data = {
                 'name': domain.lower()
             }
+
             if dn is not None and dn != '':
                 data['dn'] = dn
-            if f is None and object_identifier is not None and object_identifier != '':
+
+            if object_identifier is not None and object_identifier != '':
                 data['object_identifier'] = object_identifier
 
             self.insert_ignore_one('domains', **data)
@@ -136,11 +173,10 @@ class KnowsMoreDB(Database):
             if dn is not None and dn != '':
                 data['dn'] = dn
 
-            if f is None and object_identifier is not None and object_identifier != '':
+            if object_identifier is not None and object_identifier != '':
                 data['object_identifier'] = object_identifier
 
             self.update('domains', {'domain_id': domain_id}, **data)
-
 
         return domain_id
 

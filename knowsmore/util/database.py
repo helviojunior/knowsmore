@@ -115,6 +115,8 @@ class Database(object):
             .format(table_name, ','.join(columns), ', '.join(['?'] * len(columns)))
         conn.execute(sql, values)
         conn.commit()
+        self.disconnect_from_db(conn)
+
     @connect
     def insert_ignore_one(self, conn, table_name, **kwargs):
         table_name = self.scrub(table_name)
@@ -123,15 +125,20 @@ class Database(object):
             .format(table_name, ','.join(columns), ', '.join(['?'] * len(columns)))
         conn.execute(sql, values)
         conn.commit()
+        self.disconnect_from_db(conn)
 
     @connect
     def select(self, conn, table_name, **kwargs):
+
+        operator = self.scrub(kwargs.get('__operator', 'and'))
+
         table_name = self.scrub(table_name)
         (columns, values) = self.parse_args(kwargs)
 
         sql = f"SELECT * FROM {table_name}"
         if len(columns) > 0:
-            sql += " WHERE {}".format(' and '.join([f'{col} = ?' for col in columns]))
+            sql += " WHERE {}".format(f' {operator} '.join([f'{col} = ?' for col in columns]))
+
         cursor = conn.execute(sql, values)
 
         columns = cursor.description
@@ -145,12 +152,15 @@ class Database(object):
 
     @connect
     def select_count(self, conn, table_name, **kwargs) -> int:
+
+        operator = self.scrub(kwargs.get('__operator', 'and'))
+
         table_name = self.scrub(table_name)
         (columns, values) = self.parse_args(kwargs)
 
         sql = f"SELECT count(*) FROM {table_name}"
         if len(columns) > 0:
-            sql += " WHERE {}".format(', '.join([f'{col} = ?' for col in columns]))
+            sql += " WHERE {}".format(f' {operator} '.join([f'{col} = ?' for col in columns]))
         cursor = conn.execute(sql, values)
         data = cursor.fetchone()
 
@@ -158,6 +168,9 @@ class Database(object):
 
     @connect
     def update(self, conn, table_name, filter_data, **kwargs):
+
+        operator = self.scrub(kwargs.get('__operator', 'and'))
+
         table_name = self.scrub(table_name)
         (f_columns, f_values) = self.parse_args(filter_data)
         (u_columns, u_values) = self.parse_args(kwargs)
@@ -165,9 +178,10 @@ class Database(object):
         sql = f"UPDATE {table_name} SET "
         sql += "{}".format(', '.join([f'{col} = ?' for col in u_columns]))
         if len(f_columns) > 0:
-            sql += " WHERE {}".format(' and '.join([f'{col} = ?' for col in f_columns]))
+            sql += " WHERE {}".format(f' {operator} '.join([f'{col} = ?' for col in f_columns]))
         conn.execute(sql, tuple(u_values + f_values,))
         conn.commit()
+        self.disconnect_from_db(conn)
 
     def parse_args(self, source_dict) -> tuple:
         if source_dict is None:
@@ -181,8 +195,9 @@ class Database(object):
 
         for key, value in source_dict.items():
             try:
-                columns.append(f"[{self.scrub(key)}]")
-                values.append(value)
+                if key[0:2] != '__':
+                    columns.append(f"[{self.scrub(key)}]")
+                    values.append(value)
             except Exception as e:
                 raise Exception(f'Error parsing {key}: {value}', e)
 
@@ -232,6 +247,7 @@ class Database(object):
                 type varchar(1) NOT NULL  DEFAULT('U'),
                 name varchar(500) NOT NULL,
                 object_identifier TEXT NOT NULL DEFAULT(''),
+                dn TEXT NOT NULL DEFAULT(''),
                 groups TEXT NOT NULL DEFAULT(''),
                 password_id INTEGER NOT NULL,
                 insert_date datetime not null DEFAULT (datetime('now','localtime')),

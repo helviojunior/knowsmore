@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 from zipfile import ZipFile
 from argparse import _ArgumentGroup, Namespace
+from clint.textui import progress
 
 from knowsmore.cmdbase import CmdBase
 from knowsmore.password import Password
@@ -106,221 +107,259 @@ class Bloodhound(CmdBase):
             raise e
 
     def parse_file(self, filename):
-        count = 0
-        try:
 
-            with open(filename, 'r', encoding="UTF-8", errors="surrogateescape") as f:
-                json_data = json.load(f)
+        with open(filename, 'r', encoding="UTF-8", errors="surrogateescape") as f:
+            json_data = json.load(f)
 
-                meta = json_data.get('meta', {})
-                type = meta.get('type', None)
-                qty = meta.get('count', None)
-                version = meta.get('version', None)
+            meta = json_data.get('meta', {})
+            type = meta.get('type', None)
+            qty = meta.get('count', None)
+            version = meta.get('version', None)
 
-                if type is None or version is None:
-                    Logger.pl('{!} {R}error: BloodHound filename is invalid {O}%s{R} {W}\r\n' % (
-                        filename))
-                    Tools.exit_gracefully(1)
+            if type is None or version is None:
+                Logger.pl('{!} {R}error: BloodHound filename is invalid {O}%s{R} {W}\r\n' % (
+                    filename))
+                Tools.exit_gracefully(1)
 
-                # Domains
-                if type.lower() == "domains":
-                    if str(version) == "4":
-                        Color.pl('{?} {W}{D}importing domains...{W}')
-                        data = json_data.get('data', [])
-                        for dd in data:
-                            count += 1
+            # Domains
+            if type.lower() == "domains":
+                if str(version) == "4":
+                    Color.pl('{?} {W}{D}importing domains...{W}')
+                    data = json_data.get('data', [])
+                    with progress.Bar(label="Processing ", expected_size=qty) as bar:
+                        try:
+                            for didx, dd in enumerate(data):
+                                    if didx & 0xf == 0:
+                                        bar.show(didx)
+
+                                    oid = dd.get('ObjectIdentifier', None)
+                                    properties = dd.get('Properties', None)
+
+                                    if oid is None or properties is None:
+                                        raise Exception('Unable to parse domain data')
+
+                                    name = properties.get('name', None)
+                                    domain = properties.get('domain', None)
+                                    dn = properties.get('distinguishedname', None)
+
+                                    if name is None or domain is None or dn is None:
+                                        raise Exception('Unable to parse domain data')
+
+                                    self.db.insert_or_get_domain(
+                                        domain=domain,
+                                        dn=dn,
+                                        object_identifier=oid)
+                        except KeyboardInterrupt as e:
+                            raise e
+                        finally:
+                            bar.hide = True
                             Tools.clear_line()
-                            print(("Processing [%d]" % count), end='\r', flush=True)
 
-                            oid = dd.get('ObjectIdentifier', None)
-                            properties = dd.get('Properties', None)
+                else:
+                    raise Exception('Unsupported BloodHound Version')
 
-                            if oid is None or properties is None:
-                                raise Exception('Unable to parse domain data')
+            # groups
+            elif type.lower() == "groups":
+                groups = {}
 
-                            name = properties.get('name', None)
-                            domain = properties.get('domain', None)
-                            dn = properties.get('distinguishedname', None)
+                if str(version) == "4":
+                    Color.pl('{?} {W}{D}loading groups...{W}')
+                    data = json_data.get('data', [])
+                    with progress.Bar(label="Processing ", expected_size=qty) as bar:
+                        try:
+                            for didx, dd in enumerate(data):
+                                if didx & 0xf == 0:
+                                    bar.show(didx)
 
-                            if name is None or domain is None or dn is None:
-                                raise Exception('Unable to parse domain data')
+                                gid = dd.get('ObjectIdentifier', None)
+                                properties = dd.get('Properties', None)
 
-                            self.db.insert_or_get_domain(
-                                domain=domain,
-                                dn=dn,
-                                object_identifier=oid)
+                                if gid is None or properties is None:
+                                    raise Exception('Unable to parse domain data')
 
-                    else:
-                        raise Exception('Unsupported BloodHound Version')
+                                name = properties.get('name', '@').split('@')[0]
+                                dn = properties.get('distinguishedname', None)
 
-                # groups
-                elif type.lower() == "groups":
+                                domain_id = self.get_domain(properties)
+
+                                groups[gid] = {
+                                    "name": name,
+                                    "domain_id": domain_id,
+                                    "object_identifier": gid,
+                                    "dn": dn,
+                                    "json_members": dd.get('Members', []),
+                                    "members": [],
+                                    "membership": []
+                                }
+
+                                # Step 1
+                                members = dd.get('Members', [])
+                                for g in members:
+                                    t = g.get('ObjectType', None)
+                                    oid = g['ObjectIdentifier']
+                                    if t == "Group":
+                                        groups[gid]['members'].append(oid)
+
+                        except KeyboardInterrupt as e:
+                            raise e
+                        finally:
+                            bar.hide = True
+                            Tools.clear_line()
+
+                else:
+                    raise Exception('Unsupported BloodHound Version')
+
+                if len(groups) > 0:
+                    def get_group_chain(groupId, chain):
+
+                        if groupId in chain:
+                            return []
+
+                        grp = []
+                        grp.append(groupId)
+
+                        for g in groups:
+                            members = groups[g].get('members', [])
+                            if groupId in members:
+                                if g not in grp:
+                                    grp.append(g)
+                                    tmp = get_group_chain(g, chain + grp)
+                                    for t in tmp:
+                                        if t not in grp:
+                                            grp.append(t)
+                        return grp
+
+                    Color.pl('{?} {W}{D}calculating group chain...{W}' + ' ' * 50)
+                    cnt = len(groups)
+                    with progress.Bar(label="Processing ", expected_size=cnt) as bar:
+                        try:
+                            for idx, g in enumerate(groups):
+                                if idx & 0xf == 0:
+                                    bar.show(idx)
+
+                                groups[g]['membership'] = get_group_chain(g, [])
+
+                        except KeyboardInterrupt as e:
+                            raise e
+                        finally:
+                            bar.hide = True
+                            Tools.clear_line()
+
+                    Color.pl('{?} {W}{D}inserting groups...{W}' + ' ' * 50)
+                    with progress.Bar(label="Inserting ", expected_size=cnt) as bar:
+                        try:
+                            for idx, g in enumerate(groups):
+                                if idx & 0xf == 0:
+                                    bar.show(idx)
+
+                                self.db.insert_group(
+                                    domain=groups[g]['domain_id'],
+                                    object_identifier=groups[g].get('object_identifier', '') if groups[g].get('object_identifier', None) is not None else '',
+                                    name=groups[g]['name'],
+                                    dn=groups[g].get('dn', '') if groups[g].get('dn', None) is not None else '',
+                                    members=json.dumps(groups[g]['json_members']),
+                                    membership=','.join(groups[g]['membership'])
+                                )
+
+                        except KeyboardInterrupt as e:
+                            raise e
+                        finally:
+                            bar.hide = True
+                            Tools.clear_line()
+
+            #Users
+            elif type.lower() == "users":
+                if str(version) == "4":
+
+                    Color.pl('{?} {W}{D}loading groups from db...{W}' + ' ' * 50)
+                    user_groups = {}
                     groups = {}
 
-                    if str(version) == "4":
-                        Color.pl('{?} {W}{D}loading groups...{W}')
-                        data = json_data.get('data', [])
-                        for didx, dd in enumerate(data):
-                            p = int(((didx + 1) / qty) * 100)
+                    db_groups = self.db.select('groups')
+
+                    with progress.Bar(label="Loading ", expected_size=len(db_groups)) as bar:
+                        try:
+                            for idx, row in enumerate(db_groups):
+                                bar.show(idx)
+
+                                gid = row['group_id']
+                                members = json.loads(row['members'])
+                                for g in members:
+                                    t = g['ObjectType']
+                                    oid = g['ObjectIdentifier']
+                                    if t == "User":
+                                        ug = user_groups.get(oid, [])
+                                        ug.append(gid)
+                                        user_groups[oid] = ug
+
+                                groups[gid] = {
+                                    'name':  row['name'],
+                                    'membership': row['membership'].split(',')
+                                }
+
+                        except KeyboardInterrupt as e:
+                            raise e
+                        finally:
+                            bar.hide = True
                             Tools.clear_line()
-                            print(("Processing [%s/%s => %s%%]" % (didx + 1, qty, p)), end='\r', flush=True)
 
-                            gid = dd.get('ObjectIdentifier', None)
-                            properties = dd.get('Properties', None)
+                    def get_user_groups(userId):
+                        ug = user_groups.get(userId, [])
+                        gids = []
+                        for g in ug:
+                            tmp = groups[g]['membership']
+                            for t in tmp:
+                                if t not in gids:
+                                    gids.append(t)
 
-                            if gid is None or properties is None:
-                                raise Exception('Unable to parse domain data')
+                        group_names = []
+                        for g in gids:
+                            gname = groups.get(g, {}).get("name", None)
+                            if gname is not None:
+                                group_names.append(gname)
 
-                            name = properties.get('name', '@').split('@')[0]
-                            dn = properties.get('distinguishedname', None)
+                        return ', '.join(group_names)
 
-                            domain_id = self.get_domain(properties)
+                    Tools.clear_line()
+                    Color.pl('{?} {W}{D}importing users...{W}' + ' ' * 50)
+                    data = json_data.get('data', [])
+                    with progress.Bar(label="Inserting ", expected_size=qty) as bar:
+                        try:
+                            for didx, dd in enumerate(data):
+                                bar.show(didx)
 
-                            groups[gid] = {
-                                "name": name,
-                                "domain_id": domain_id,
-                                "object_identifier": gid,
-                                "dn": dn,
-                                "json_members": dd.get('Members', []),
-                                "members": [],
-                                "membership": []
-                            }
+                                oid = dd.get('ObjectIdentifier', None)
+                                properties = dd.get('Properties', None)
 
-                            # Step 1
-                            members = dd.get('Members', [])
-                            for g in members:
-                                t = g.get('ObjectType', None)
-                                oid = g['ObjectIdentifier']
-                                if t == "Group":
-                                    groups[gid]['members'].append(oid)
+                                if oid is None or properties is None:
+                                    raise Exception('Unable to parse user data 1: %s' % json.dumps(dd))
 
+                                name = properties.get('name', '@').split('@')[0].lower()
+                                dn = properties.get('distinguishedname', None)
 
-                    else:
-                        raise Exception('Unsupported BloodHound Version')
+                                if name is None:
+                                    raise Exception('Unable to parse user data 2: %s' % json.dumps(dd))
 
-                    if len(groups) > 0:
-                        def get_group_chain(groupId, chain):
+                                domain_id = self.get_domain(properties)
 
-                            if groupId in chain:
-                                return []
+                                # Hard-coded empty password
+                                self.db.insert_or_update_credential(
+                                    domain=domain_id,
+                                    username=name,
+                                    groups=get_user_groups(oid),
+                                    object_identifier=oid,
+                                    dn=dn,
+                                    ntlm_hash='',
+                                    type='U')
 
-                            grp = []
-                            grp.append(groupId)
-
-                            for g in groups:
-                                members = groups[g].get('members', [])
-                                if groupId in members:
-                                    if g not in grp:
-                                        grp.append(g)
-                                        tmp = get_group_chain(g, chain + grp)
-                                        for t in tmp:
-                                            if t not in grp:
-                                                grp.append(t)
-                            return grp
-
-                        Color.pl('{?} {W}{D}calculating group chain...{W}' + ' ' * 50)
-                        cnt = len(groups)
-                        for idx, g in enumerate(groups):
-                            p = int(((idx + 1) / cnt) * 100)
-
+                        except KeyboardInterrupt as e:
+                            raise e
+                        finally:
+                            bar.hide = True
                             Tools.clear_line()
-                            print(("Processing [%s/%s => %s%%]" % (idx + 1, cnt, p)), end='\r', flush=True)
-                            groups[g]['membership'] = get_group_chain(g, [])
 
-                        Color.pl('{?} {W}{D}inserting groups...{W}' + ' ' * 50)
-                        for idx, g in enumerate(groups):
-                            p = int(((idx + 1) / cnt) * 100)
-                            Tools.clear_line()
-                            print(("Inserting [%s/%s => %s%%]" % (idx + 1, cnt, p)), end='\r', flush=True)
-                            self.db.insert_group(
-                                domain=groups[g]['domain_id'],
-                                object_identifier=groups[g].get('object_identifier', '') if groups[g].get('object_identifier', None) is not None else '',
-                                name=groups[g]['name'],
-                                dn=groups[g].get('dn', '') if groups[g].get('dn', None) is not None else '',
-                                members=json.dumps(groups[g]['json_members']),
-                                membership=','.join(groups[g]['membership'])
-                            )
-
-                #Users
-                elif type.lower() == "users":
-                    if str(version) == "4":
-
-                        Color.pl('{?} {W}{D}loading groups from db...{W}' + ' ' * 50)
-                        user_groups = {}
-                        groups = {}
-
-                        db_groups = self.db.select('groups')
-
-                        for row in db_groups:
-                            gid = row['group_id']
-                            members = json.loads(row['members'])
-                            for g in members:
-                                t = g['ObjectType']
-                                oid = g['ObjectIdentifier']
-                                if t == "User":
-                                    ug = user_groups.get(oid, [])
-                                    ug.append(gid)
-                                    user_groups[oid] = ug
-
-                            groups[gid] = {
-                                'name':  row['name'],
-                                'membership': row['membership'].split(',')
-                            }
-
-                        def get_user_groups(userId):
-                            ug = user_groups.get(userId, [])
-                            gids = []
-                            for g in ug:
-                                tmp = groups[g]['membership']
-                                for t in tmp:
-                                    if t not in gids:
-                                        gids.append(t)
-
-                            group_names = []
-                            for g in gids:
-                                gname = groups.get(g, {}).get("name", None)
-                                if gname is not None:
-                                    group_names.append(gname)
-
-                            return ', '.join(group_names)
-
-                        Color.pl('{?} {W}{D}importing users...{W}' + ' ' * 50)
-                        data = json_data.get('data', [])
-                        for didx, dd in enumerate(data):
-                            p = int(((didx + 1) / qty) * 100)
-                            Tools.clear_line()
-                            print(("Processing [%s/%s => %s%%]" % (didx + 1, qty, p)), end='\r', flush=True)
-
-                            oid = dd.get('ObjectIdentifier', None)
-                            properties = dd.get('Properties', None)
-
-                            if oid is None or properties is None:
-                                raise Exception('Unable to parse user data 1: %s' % json.dumps(dd))
-
-                            name = properties.get('name', '@').split('@')[0].lower()
-                            dn = properties.get('distinguishedname', None)
-
-                            if name is None:
-                                raise Exception('Unable to parse user data 2: %s' % json.dumps(dd))
-
-                            domain_id = self.get_domain(properties)
-
-                            # Hard-coded empty password
-                            self.db.insert_credential(
-                                domain=domain_id,
-                                username=name,
-                                dn=dn,
-                                ntlm_hash='31d6cfe0d16ae931b73c59d7e0c089c0',
-                                type='U')
-
-                    else:
-                        raise Exception('Unsupported BloodHound Version')
-
-
-        except KeyboardInterrupt as e:
-            Tools.clear_line()
-            print((" " * 180), end='\r', flush=True)
-            raise e
+                else:
+                    raise Exception('Unsupported BloodHound Version')
 
     def get_domain(self, properties):
         domain_name = properties.get('domain', None)
