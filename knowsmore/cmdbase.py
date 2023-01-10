@@ -2,6 +2,7 @@ import os
 import datetime
 import importlib
 import pkgutil
+import sqlite3
 import sys
 import traceback
 from argparse import _ArgumentGroup, ArgumentParser, Namespace
@@ -9,13 +10,16 @@ from pathlib import Path
 
 from knowsmore.module import Module
 from knowsmore.util.color import Color
+from knowsmore.util.database import Database
 from knowsmore.util.logger import Logger
 
 
 class CmdBase(object):
     help_show = True
+    check_database = True
     name = ''
     description = ''
+    verbose = 0
 
     def __init__(self, name, description, help_show=True):
         self.name = name
@@ -70,6 +74,37 @@ class CmdBase(object):
 
         except Exception as e:
             raise Exception('Error listing command modules', e)
+
+    def open_db(self, args: Namespace, check: bool = False) -> Database:
+        db_name = os.path.abspath(args.dbfile.strip())
+
+        if not os.path.isfile(db_name):
+            Color.pl('{!} {R}error: database file not found {O}%s{R}{W}\r\n' % db_name)
+            exit(1)
+
+        try:
+            db = Database(auto_create=False,
+                          db_name=db_name)
+
+            if check:
+                db.checkOpen()
+
+            return db
+
+        except sqlite3.OperationalError as e:
+            Logger.pl(
+                '{!} {R}error: the database file exists but is not an SQLite or table structure was not created. Use parameter {O}--create-db{R} command to create.{W}\r\n')
+            exit(1)
+        except Exception as e:
+            Logger.pl(
+                '{!} {R}error: {O}%s{W}\r\n' % str(e))
+            exit(1)
+
+    def print_verbose(self, text: str, min_level: int = 1):
+        if self.verbose <= min_level:
+            return
+
+        Logger.pl('{?} {W}{D}%s{W}' % text)
 
     def add_flags(self, flags: _ArgumentGroup):
         pass

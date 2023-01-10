@@ -12,6 +12,7 @@ from knowsmore.util.logger import Logger
 class CreateDb(CmdBase):
     db_name = ''
     force = False
+    check_database = False
 
     def __init__(self):
         super().__init__('create-db', 'Create an empty database')
@@ -24,13 +25,7 @@ class CreateDb(CmdBase):
                            help=Color.s('Force overwrite SQLite local database'))
 
     def add_commands(self, cmds: _ArgumentGroup):
-        cmds.add_argument('-db',
-                          action='store',
-                          metavar='[sqlite file]',
-                          type=str,
-                          default='./knowsmore.db',
-                          dest=f'dbfile',
-                          help=Color.s('Filename to save the correlations data. (default: {G}./knowsmore.db{W})'))
+        pass
 
     def load_from_arguments(self, args: Namespace) -> bool:
         if args.dbfile is None or args.dbfile.strip() == '':

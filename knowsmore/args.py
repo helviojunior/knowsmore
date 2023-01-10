@@ -73,6 +73,14 @@ class Arguments(object):
         return parser.parse_args()
 
     def _add_flags_args(self, flags: _ArgumentGroup):
+        flags.add_argument('-db',
+                          action='store',
+                          metavar='[sqlite file]',
+                          type=str,
+                          default='./knowsmore.db',
+                          dest=f'dbfile',
+                          help=Color.s('Filename to save the correlations data. (default: {G}./knowsmore.db{W})'))
+
         flags.add_argument('-h', '--help',
                            action='help',
                            help=Color.s('show help message and exit'))

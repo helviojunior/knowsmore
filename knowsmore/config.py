@@ -75,6 +75,10 @@ class Configuration(object):
             Configuration.mandatory()
 
         Configuration.module = module
+
+        if module.check_database:
+            Configuration.module.open_db(args=args.args, check=True)
+
         print('  ')
 
     @staticmethod
