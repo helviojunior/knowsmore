@@ -19,13 +19,15 @@ from knowsmore.util.tools import Tools
 class NTLMHash(CmdBase):
 
     class ImportMode(Enum):
-        Undefined = 0, "Undefined"
-        NTDS = 1, "NTDS File"
-        Cracked = 2, "Cracked File"
+        Undefined = 0
+        NTDS = 1
+        Cracked = 2
+        Password = 3
 
     filename = ''
     db = None
     mode = ImportMode.Undefined
+    password = None
 
     def __init__(self):
         super().__init__('ntlm-hash', 'Import NTLM hashes ans users')
@@ -52,70 +54,102 @@ class NTLMHash(CmdBase):
                           dest=f'crackedfile',
                           help=Color.s('Hashcat cracked hashes filename. (format: {G}hash{R}:{G}password{W})'))
 
+        cmds.add_argument('--add-password',
+                          action='store',
+                          metavar='[clear text password]',
+                          type=str,
+                          default='',
+                          dest=f'password',
+                          help=Color.s('Add clear text password to database'))
+
     def load_from_arguments(self, args: Namespace) -> bool:
-        if (args.ntlmfile is None or args.ntlmfile.strip() == '') and \
-                (args.crackedfile is None or args.crackedfile.strip() == ''):
-            Tools.mandatory()
 
-        if args.ntlmfile is not None and args.ntlmfile.strip() != '':
-            if not os.path.isfile(args.ntlmfile):
-                Logger.pl('{!} {R}error: NTLM filename is invalid {O}%s{R} {W}\r\n' % (
+        if args.password != '':
+            if args.password.strip() == '':
+                Tools.mandatory()
+
+            self.password = Password(
+                ntlm_hash='',
+                clear_text=args.password
+            )
+
+            self.mode = NTLMHash.ImportMode.Password
+
+        else:
+            if (args.ntlmfile is None or args.ntlmfile.strip() == '') and \
+                    (args.crackedfile is None or args.crackedfile.strip() == ''):
+                Tools.mandatory()
+
+            if args.ntlmfile is not None and args.ntlmfile.strip() != '':
+                if not os.path.isfile(args.ntlmfile):
+                    Logger.pl('{!} {R}error: NTLM filename is invalid {O}%s{R} {W}\r\n' % (
+                        args.ntlmfile))
+                    Tools.exit_gracefully(1)
+
+                try:
+                    with open(args.ntlmfile, 'r') as f:
+                        # file opened for writing. write to it here
+                        pass
+                except IOError as x:
+                    if x.errno == errno.EACCES:
+                        Logger.pl('{!} {R}error: could not open NTLM hashes file {O}permission denied{R}{W}\r\n')
+                        Tools.exit_gracefully(1)
+                    elif x.errno == errno.EISDIR:
+                        Logger.pl('{!} {R}error: could not open NTLM hashes file {O}it is an directory{R}{W}\r\n')
+                        Tools.exit_gracefully(1)
+                    else:
+                        Logger.pl('{!} {R}error: could not open NTLM hashes file {W}\r\n')
+                        Tools.exit_gracefully(1)
+
+                self.mode = NTLMHash.ImportMode.NTDS
+                self.filename = args.ntlmfile
+
+            elif args.crackedfile is not None or args.crackedfile.strip() != '':
+                if not os.path.isfile(args.crackedfile):
+                    Logger.pl('{!} {R}error: NTLM filename is invalid {O}%s{R} {W}\r\n' % (
+                        args.ntlmfile))
+                    Tools.exit_gracefully(1)
+
+                try:
+                    with open(args.crackedfile, 'r') as f:
+                        # file opened for writing. write to it here
+                        pass
+                except IOError as x:
+                    if x.errno == errno.EACCES:
+                        Logger.pl('{!} {R}error: could not open NTLM hashes file {O}permission denied{R}{W}\r\n')
+                        Tools.exit_gracefully(1)
+                    elif x.errno == errno.EISDIR:
+                        Logger.pl('{!} {R}error: could not open NTLM hashes file {O}it is an directory{R}{W}\r\n')
+                        Tools.exit_gracefully(1)
+                    else:
+                        Logger.pl('{!} {R}error: could not open NTLM hashes file {W}\r\n')
+                        Tools.exit_gracefully(1)
+
+                self.mode = NTLMHash.ImportMode.Cracked
+                self.filename = args.crackedfile
+
+            if self.mode == NTLMHash.ImportMode.Undefined:
+                Logger.pl('{!} {R}error: Nor {O}--import-ntds{R} or {O}--import-cracked{R} was provided{W}\r\n' % (
                     args.ntlmfile))
                 Tools.exit_gracefully(1)
-
-            try:
-                with open(args.ntlmfile, 'r') as f:
-                    # file opened for writing. write to it here
-                    pass
-            except IOError as x:
-                if x.errno == errno.EACCES:
-                    Logger.pl('{!} {R}error: could not open NTLM hashes file {O}permission denied{R}{W}\r\n')
-                    Tools.exit_gracefully(1)
-                elif x.errno == errno.EISDIR:
-                    Logger.pl('{!} {R}error: could not open NTLM hashes file {O}it is an directory{R}{W}\r\n')
-                    Tools.exit_gracefully(1)
-                else:
-                    Logger.pl('{!} {R}error: could not open NTLM hashes file {W}\r\n')
-                    Tools.exit_gracefully(1)
-
-            self.mode = NTLMHash.ImportMode.NTDS
-            self.filename = args.ntlmfile
-
-        elif args.crackedfile is not None or args.crackedfile.strip() != '':
-            if not os.path.isfile(args.crackedfile):
-                Logger.pl('{!} {R}error: NTLM filename is invalid {O}%s{R} {W}\r\n' % (
-                    args.ntlmfile))
-                Tools.exit_gracefully(1)
-
-            try:
-                with open(args.crackedfile, 'r') as f:
-                    # file opened for writing. write to it here
-                    pass
-            except IOError as x:
-                if x.errno == errno.EACCES:
-                    Logger.pl('{!} {R}error: could not open NTLM hashes file {O}permission denied{R}{W}\r\n')
-                    Tools.exit_gracefully(1)
-                elif x.errno == errno.EISDIR:
-                    Logger.pl('{!} {R}error: could not open NTLM hashes file {O}it is an directory{R}{W}\r\n')
-                    Tools.exit_gracefully(1)
-                else:
-                    Logger.pl('{!} {R}error: could not open NTLM hashes file {W}\r\n')
-                    Tools.exit_gracefully(1)
-
-            self.mode = NTLMHash.ImportMode.Cracked
-            self.filename = args.crackedfile
-
-        if self.mode == NTLMHash.ImportMode.Undefined:
-            Logger.pl('{!} {R}error: Nor {O}--import-ntds{R} or {O}--import-cracked{R} was provided{W}\r\n' % (
-                args.ntlmfile))
-            Tools.exit_gracefully(1)
 
         self.db = self.open_db(args)
 
         return True
 
     def run(self):
-        if self.mode == NTLMHash.ImportMode.NTDS:
+        if self.mode == NTLMHash.ImportMode.Password:
+
+            pdata = {}
+
+            if Configuration.company != '':
+                pdata['company_similarity'] = self.password.calc_ratio(Configuration.company)
+
+            self.db.insert_password_manually(self.password, **pdata)
+            Logger.pl('{+} {C}Password inserted/updated{W}')
+            print(self.password)
+
+        elif self.mode == NTLMHash.ImportMode.NTDS:
             (user_index, ntlm_hash_index) = self.get_ntds_columns()
             min_col = -1
             if user_index > min_col:
@@ -215,7 +249,7 @@ class NTLMHash(CmdBase):
                                 ignored += 1
                                 continue
 
-                            pdata = { }
+                            pdata = {}
 
                             password = Password(
                                 ntlm_hash=c1[0].lower(),

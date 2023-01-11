@@ -6,7 +6,7 @@ from knowsmore.util.tools import Tools
 from math import log
 from Levenshtein import ratio
 
-LEETS = {"a":"aA@49áÁàÀ","b":"bB8","c":"cCçÇ","d":"dD","e":"eE32","f":"fF","g":"gG96","h":"hH#","i":"iI!1","j":"jJ","k":"kK","l":"lL!1","m":"mM","n":"nNñÑ","o":"oO04","p":"pP","q":"qQ","r":"rR","s":"sS5$","t":"tT7+","u":"uU","v":"vV","w":"wW","x":"xX","y":"yY","z":"zZ2","0":"0","1":"1","2":"2","3":"3","4":"4","5":"5","6":"6","7":"7","8":"8","9":"9"}
+LEETS = {"a": "aA@49\u00e1\u00c1\u00e0\u00c0\u00c2\u00c3\u00c4\u00c5\u00e2\u00e3\u00e4\u00e5", "b": "bB8", "c": "cC\u00e7\u00c7", "d": "dD", "e": "eE32\u00c8\u00c9\u00ca\u00cb\u00e8\u00e9\u00ea\u00eb", "f": "fF", "g": "gG96", "h": "hH#", "i": "iI!1\u00cc\u00cd\u00ce\u00cf\u00ec\u00ed\u00ee\u00ef", "j": "jJ", "k": "kK", "l": "lL!1", "m": "mM", "n": "nN\u00f1\u00d1", "o": "oO04\u00d2\u00d3\u00d4\u00d5\u00d6\u00f2\u00f3\u00f4\u00f5\u00f6", "p": "pP", "q": "qQ", "r": "rR", "s": "sS5$", "t": "tT7+", "u": "uU\u00d9\u00da\u00db\u00dc\u00f9\u00fa\u00fb\u00fc", "v": "vV", "w": "wW", "x": "xX", "y": "yY\u00dd\u00fd", "z": "zZ2", "0": "0", "1": "1", "2": "2", "3": "3", "4": "4", "5": "5", "6": "6", "7": "7", "8": "8", "9": "9"}
 
 class Password(object):
     weak_bits = 30
@@ -17,12 +17,26 @@ class Password(object):
     length = lower = upper = digit = special = latin = 0
     md5_hash = sha1_hash = sha256_hash = sha512_hash = ''
     entropy = 0
+    similarity = 0
+    leets_cache = {}
 
     def __init__(self, ntlm_hash: str, clear_text: str):
+
+        if ntlm_hash == '' and clear_text is not None and clear_text != '':
+            import hashlib, binascii
+            hash = hashlib.new('md4', clear_text.encode('utf-16le')).digest()
+            ntlm_hash = binascii.hexlify(hash)
+            if isinstance(ntlm_hash, bytes):
+                ntlm_hash = ntlm_hash.decode("UTF-8")
+            ntlm_hash = ntlm_hash.lower()
+
         self.ntlm_hash = ntlm_hash
         self.clear_text = clear_text
         self.latin_clear_text = clear_text
         self.bytes_password = clear_text.encode("UTF-8")
+
+        if Password.leets_cache is None:
+            Password.leets_cache = {}
 
         if '$HEX[' in self.clear_text:
             self.bytes_password = codecs.decode(self.clear_text[5:-1], 'hex_codec')
@@ -139,10 +153,20 @@ class Password(object):
                     yield from self.get_leets(p, index + 1)
 
     def calc_ratio(self, name: str, score_cutoff: float = 0.4) -> int:
+        if name == 0:
+            name = name.lower()
+
         str_pass = self.bytes_password.decode("Latin-1")
-        return sorted(
-            [round(ratio(l1, str_pass, score_cutoff=score_cutoff) * float(100)) for l1 in self.get_leets(name)]
+
+        # Use a static cache to increase speed
+        if name not in Password.leets_cache.keys():
+            Password.leets_cache[name] = [l1 for l1 in self.get_leets(name)]
+
+        self.similarity = sorted(
+            [round(ratio(l1, str_pass, score_cutoff=score_cutoff) * float(100)) for l1 in Password.leets_cache[name]]
         )[-1]
+
+        return self.similarity
 
     def __str__(self):
         return f'''NTLM........: {self.ntlm_hash}
