@@ -114,6 +114,8 @@ hashcat -m 1000 -a 3 -O --increment --increment-min 4 -o "~/Desktop/cracked.txt"
 knowsmore --ntlm-hash --company clientCompanyName --import-cracked ~/Desktop/cracked.txt
 ```
 
+**Note:** Change **clientCompanyName** to name of your company
+
 ## Importing BloodHound files
 
 ```bash
