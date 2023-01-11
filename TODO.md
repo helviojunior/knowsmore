@@ -26,4 +26,5 @@
 ## Exporters
 * [x] Export data to JSON file
 * [ ] Export data to ElasticSearch
+* [ ] Export data to Splunk
 * [ ] Export Password Spray list
