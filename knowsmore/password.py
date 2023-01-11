@@ -60,16 +60,23 @@ class Password(object):
 
         self.length = len(self.bytes_password)
 
+        self.length = self.lower = self.upper = self.digit = self.special = self.latin = 0
+
         # Calculate entropy
         # it raises an error if length is less than 1
         if self.length > 1:
             unique = set(self.bytes_password)
             self.entropy = int(round(self.length * log(len(unique), 2), 0))
 
-        for b in self.bytes_password:
-            try:
+        for idx, c in enumerate(self.latin_clear_text):
 
-                c = bytes([b]).decode("UTF-8")[0]
+                # check latin
+                try:
+                    b = c.encode("Latin-1")
+                    tst = b.decode("UTF-8")
+                except UnicodeDecodeError:
+                    self.latin += 1
+                    continue
 
                 # counting lowercase alphabets
                 if c.islower():
@@ -87,8 +94,7 @@ class Password(object):
                 else:
                     self.special += 1
 
-            except UnicodeDecodeError:
-                self.latin += 1
+
 
     def cal_hashes(self):
         self.md5_hash = hashlib.md5(self.bytes_password).hexdigest().lower()
