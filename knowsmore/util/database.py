@@ -105,7 +105,6 @@ class Database(object):
     @connect
     def select_raw(self, conn, sql: str, args: any):
         cursor = conn.execute(sql, tuple(args,))
-
         columns = cursor.description
         return [{columns[index][0]: column for index, column in enumerate(value)} for value in cursor.fetchall()]
 

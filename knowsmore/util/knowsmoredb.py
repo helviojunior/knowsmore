@@ -67,7 +67,11 @@ class KnowsMoreDB(Database):
                     lower=password.lower,
                     digit=password.digit,
                     special=password.special,
-                    latin=password.latin
+                    latin=password.latin,
+                    md5_hash=password.md5_hash,
+                    sha1_hash=password.sha1_hash,
+                    sha256_hash=password.sha256_hash,
+                    sha512_hash=password.sha512_hash,
                     )
 
     def insert_or_update_credential(self, domain: int, username: str, ntlm_hash: str,
