@@ -53,6 +53,22 @@ class Stats(CmdBase):
 
         data = []
 
+        # General Stats
+        stats1 = self.db.select_raw(
+            sql='select 1 as top, "Total Users" as description, (select count(*) from credentials) as qty '
+                'union '
+                'select 2 as top, "Unique Hashes" as description, (select count(distinct ntlm_hash) from passwords) as qty '
+                'union '
+                'select 3 as top, "Cracked Hashes" as description, (select count(distinct ntlm_hash) from passwords where length > 0) as qty ',
+            args=[]
+        )
+        data.append({
+            'type': 'general_stats',
+            'domain': 'all',
+            'description': 'General Statistics',
+            'rows': stats1
+        })
+
         # General Top 10
         rows_general = self.db.select_raw(
             sql='select row_number() OVER (ORDER BY count(distinct c.credential_id) DESC) AS top, p.password, count(distinct c.credential_id) as qty '

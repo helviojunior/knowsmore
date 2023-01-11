@@ -19,6 +19,15 @@ https://github.com/helviojunior/knowsmore
      database file: knowsmore.db
   
  [+] start time 2023-01-11 03:59:20
+[?] General Statistics
++-------+----------------+-------+
+|   top | description    |   qty |
+|-------+----------------+-------|
+|     1 | Total Users    | 95369 |
+|     2 | Unique Hashes  | 74299 |
+|     3 | Cracked Hashes | 23177 |
++-------+----------------+-------+
+
  [?] General Top 10 passwords
 +-------+-------------+-------+
 |   top | password    |   qty |
