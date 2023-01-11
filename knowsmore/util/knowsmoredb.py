@@ -10,6 +10,7 @@ from .color import Color
 from .database import Database
 from ..password import Password
 
+
 class KnowsMoreDB(Database):
     dbName = ""
 
@@ -30,7 +31,8 @@ class KnowsMoreDB(Database):
     def check_open(self) -> bool:
         return self.select_count('passwords') >= 0
 
-    def insert_group(self, domain: int, object_identifier: str, name: str, dn: str = '', members: str = '', membership: str = '') -> int:
+    def insert_group(self, domain: int, object_identifier: str, name: str, dn: str = '', members: str = '',
+                     membership: str = '') -> int:
 
         if domain == -1:
             raise Exception('Invalid domain')
@@ -186,16 +188,8 @@ class KnowsMoreDB(Database):
 
     def fill_data(self):
         if not self.has_data():
-
             # Create default empty password hash
             self.insert_ignore_one('passwords',
                                    ntlm_hash='31d6cfe0d16ae931b73c59d7e0c089c0',
                                    password='(empty)'
                                    )
-
-
-
-
-
-
-

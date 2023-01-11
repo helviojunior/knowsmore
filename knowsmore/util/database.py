@@ -1,13 +1,10 @@
 #!/usr/bin/python3
 # -*- coding: UTF-8 -*-
-
+import shutil
 import sys, os.path
 import sqlite3
 import string, base64
 from sqlite3 import Connection, OperationalError, IntegrityError, ProgrammingError
-
-from .color import Color
-from ..password import Password
 
 
 # TODO: use this decorator to wrap commit/rollback in a try/except block ?
@@ -34,32 +31,23 @@ def connect(func):
         if f'{func.__module__}.{func.__qualname__}' != f'{Database.__module__}.{Database.__qualname__}.{func.__name__}':
             raise Exception('The connect decorator cannot be used outside of Database class')
 
-        #print(self)
-        #print('Arguments for args: {}'.format(args))
-        #print('Arguments for kwargs: {}'.format(kwargs))
-
         if not isinstance(self, Database):
             raise Exception('The connect decorator cannot be used outside of Database class')
 
         conn = kwargs.get('conn', None) if kwargs is not None else None
-        try:
-            # I don't know if this is the simplest and fastest query to try
-            conn.execute(
-                'SELECT name FROM sqlite_temp_master WHERE type="table";')
-            pass
-        except (AttributeError, ProgrammingError):
+        if conn is None:
             conn = self.connect_to_db()
-            pass
-
-        #nargs = tuple([conn]) + args
-        #kwargs.update({'conn': conn})
 
         return func(self, conn, *args, **kwargs)
 
     return inner_func
 
+
 class Database(object):
     db_name = ""
+
+    # Static value
+    db_connection = None
 
     def __init__(self, auto_create=True, db_name=None):
 
@@ -70,43 +58,9 @@ class Database(object):
                 self.create_db()
             else:
                 raise Exception("Database not found")
+        else:
+            self.connect_to_db()
 
-    def connect_to_db(self):
-        """Connect to a sqlite DB. Create the database if there isn't one yet.
-
-        Open a connection to a SQLite DB (either a DB file or an in-memory DB).
-        When a database is accessed by multiple connections, and one of the
-        processes modifies the database, the SQLite database is locked until that
-        transaction is committed.
-
-        Parameters
-        ----------
-        db : str
-            database name (without .db extension). If None, create an In-Memory DB.
-
-        Returns
-        -------
-        connection : sqlite3.Connection
-            connection object
-        """
-        return sqlite3.connect(self.db_name)
-
-    def disconnect_from_db(self, conn):
-        if conn is not None:
-            conn.close()
-
-    def scrub(self, input_string):
-        """Clean an input string (to prevent SQL injection).
-
-        Parameters
-        ----------
-        input_string : str
-
-        Returns
-        -------
-        str
-        """
-        return ''.join(k for k in input_string if k.isalnum() or k in '_-')
     @connect
     def insert_one(self, conn, table_name, **kwargs):
         table_name = self.scrub(table_name)
@@ -115,7 +69,6 @@ class Database(object):
             .format(table_name, ','.join(columns), ', '.join(['?'] * len(columns)))
         conn.execute(sql, values)
         conn.commit()
-        self.disconnect_from_db(conn)
 
     @connect
     def insert_ignore_one(self, conn, table_name, **kwargs):
@@ -125,7 +78,6 @@ class Database(object):
             .format(table_name, ','.join(columns), ', '.join(['?'] * len(columns)))
         conn.execute(sql, values)
         conn.commit()
-        self.disconnect_from_db(conn)
 
     @connect
     def select(self, conn, table_name, **kwargs):
@@ -179,9 +131,8 @@ class Database(object):
         sql += "{}".format(', '.join([f'{col} = ?' for col in u_columns]))
         if len(f_columns) > 0:
             sql += " WHERE {}".format(f' {operator} '.join([f'{col} = ?' for col in f_columns]))
-        conn.execute(sql, tuple(u_values + f_values,))
+        conn.execute(sql, tuple(u_values + f_values, ))
         conn.commit()
-        self.disconnect_from_db(conn)
 
     def parse_args(self, source_dict) -> tuple:
         if source_dict is None:
@@ -201,11 +152,69 @@ class Database(object):
             except Exception as e:
                 raise Exception(f'Error parsing {key}: {value}', e)
 
-        return columns, tuple(values,)
+        return columns, tuple(values, )
 
+    def connect_to_db(self, check: bool = True) -> Connection:
+        """Connect to a sqlite DB. Create the database if there isn't one yet.
 
-    @connect
-    def create_db(self, conn):
+        Open a connection to a SQLite DB (either a DB file or an in-memory DB).
+        When a database is accessed by multiple connections, and one of the
+        processes modifies the database, the SQLite database is locked until that
+        transaction is committed.
+
+        Returns
+        -------
+        connection : sqlite3.Connection
+            connection object
+        """
+
+        if Database.db_connection is not None:
+            return Database.db_connection
+
+        conn = sqlite3.connect(self.db_name)
+
+        if check:
+            try:
+                # I don't know if this is the simplest and fastest query to try
+                conn.execute(
+                    'SELECT name FROM sqlite_temp_master WHERE type="table";')
+                pass
+            except (AttributeError, ProgrammingError) as e:
+                raise Exception(f'Fail connecting to SQLite file: {self.db_name}', e)
+
+        shutil.copy(self.db_name, f'{self.db_name}.bkp')
+
+        cursor = conn.cursor()
+        # www.sqlite.org/pragma.html
+        # https://blog.devart.com/increasing-sqlite-performance.html
+        cursor.execute("PRAGMA temp_store = MEMORY")
+        # cursor.execute("PRAGMA page_size = 4096")
+        # cursor.execute("PRAGMA cache_size = 10000")
+        cursor.execute("PRAGMA locking_mode=EXCLUSIVE")
+        cursor.execute("PRAGMA synchronous=OFF")
+        cursor.execute("PRAGMA journal_mode=MEMORY")
+        # cursor.execute("PRAGMA foreign_keys=ON")
+
+        Database.db_connection = conn
+
+        return Database.db_connection
+
+    def scrub(self, input_string):
+        """Clean an input string (to prevent SQL injection).
+
+        Parameters
+        ----------
+        input_string : str
+
+        Returns
+        -------
+        str
+        """
+        return ''.join(k for k in input_string if k.isalnum() or k in '_-')
+
+    def create_db(self):
+
+        conn = self.connect_to_db(check=False)
 
         # definindo um cursor
         cursor = conn.cursor()
@@ -278,8 +287,3 @@ class Database(object):
         """)
 
         conn.commit()
-
-        #print('DB criado com sucesso.')
-        # desconectando...
-        conn.close()
-

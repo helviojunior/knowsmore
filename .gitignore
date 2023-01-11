@@ -29,6 +29,8 @@
 *.log
 *.sqlite
 *.db
+*.bkp
+*.bak
 
 # OS generated files #
 ######################
