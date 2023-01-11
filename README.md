@@ -99,3 +99,6 @@ knowsmore --bloodhound --import-data ~/Desktop/20220912105336_users.json
 
 **Note:** The KnowsMore is able to import BloodHound ZIP File and JSON (users, domains and groups) files
 
+# To do
+
+[Check the TODO file](TODO.md)
