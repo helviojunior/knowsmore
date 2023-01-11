@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 # -*- coding: UTF-8 -*-
+import math
 import shutil
 import sys, os.path
 import sqlite3
@@ -178,6 +179,7 @@ class Database(object):
             return Database.db_connection
 
         conn = sqlite3.connect(self.db_name)
+        conn.create_function('log', 2, math.log)
 
         if check:
             try:
@@ -259,8 +261,8 @@ class Database(object):
                 digit INTEGER NOT NULL DEFAULT(0),
                 special INTEGER NOT NULL DEFAULT(0),
                 latin INTEGER NOT NULL DEFAULT(0),
-                company_variation INTEGER NOT NULL DEFAULT(0),
-                user_data_variation INTEGER NOT NULL DEFAULT(0),
+                company_similarity INTEGER NOT NULL DEFAULT(0),
+                user_data_similarity INTEGER NOT NULL DEFAULT(0),
                 UNIQUE(domain_id, ntlm_hash)
             );
         """)
@@ -271,7 +273,7 @@ class Database(object):
                 domain_id INTEGER NOT NULL,
                 type varchar(1) NOT NULL  DEFAULT('U'),
                 name varchar(500) NOT NULL,
-                full_name varchar(500) NOT NULL,
+                full_name TEXT NOT NULL DEFAULT(''),
                 object_identifier TEXT NOT NULL DEFAULT(''),
                 dn TEXT NOT NULL DEFAULT(''),
                 groups TEXT NOT NULL DEFAULT(''),

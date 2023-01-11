@@ -92,6 +92,27 @@ class Stats(CmdBase):
                 'rows': rows_general
             })
 
+        # Company variation
+        rows_v1 = self.db.select_raw(
+            sql='select row_number() OVER (ORDER BY count(distinct c.credential_id) DESC) AS top, p.password, round(count(distinct c.credential_id) * log(p.company_similarity, 2)) as score, p.company_similarity, count(distinct c.credential_id) as qty '
+                'from credentials as c '
+                'inner join passwords as p '
+                'on c.password_id = p.password_id '
+                'where p.password <> "" '
+                'and p.company_similarity >= (select ifnull(avg(p1.company_similarity),0) as v1 from passwords as p1 where p1.company_similarity > 0) '
+                'group by p.password, p.company_similarity '
+                'order by score desc '
+                'LIMIT 10',
+            args=[]
+        )
+        if len(rows_v1) > 0:
+            data.append({
+                'type': 'top10_by_company_name_similarity',
+                'domain': 'all',
+                'description': 'Top 10 weak passwords by company name similarity',
+                'rows': rows_v1
+            })
+
         # General Top 10 Weaks
         rows_weak = self.db.select_raw(
             sql='select row_number() OVER (ORDER BY count(distinct c.credential_id) DESC) AS top, p.password, count(distinct c.credential_id) as qty '

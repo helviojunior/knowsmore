@@ -223,7 +223,7 @@ class NTLMHash(CmdBase):
                             )
 
                             if Configuration.company != '':
-                                pdata['company_variation'] = password.calc_ratio(Configuration.company)
+                                pdata['company_similarity'] = password.calc_ratio(Configuration.company)
 
                             self.db.update_password(
                                 password,

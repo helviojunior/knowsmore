@@ -24,6 +24,7 @@
 ## Statistics
 * [x] Generate Top 10 cracked passwords 
 * [x] Generate Top 10 cracked passwords by domain
+* [x] Generate Top 10 cracked passwords by similarity with company name
 
 ## Exporters
 * [x] Export data to JSON file
