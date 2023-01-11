@@ -103,6 +103,13 @@ class Database(object):
         return data[0]
 
     @connect
+    def select_raw(self, conn, sql: str, args: tuple):
+        cursor = conn.execute(sql, tuple(args,))
+
+        columns = cursor.description
+        return [{columns[index][0]: column for index, column in enumerate(value)} for value in cursor.fetchall()]
+
+    @connect
     def select_count(self, conn, table_name, **kwargs) -> int:
 
         operator = self.scrub(kwargs.get('__operator', 'and'))
@@ -200,6 +207,10 @@ class Database(object):
         return Database.db_connection
 
     def scrub(self, input_string):
+        return Database.scrub(input_string)
+
+    @staticmethod
+    def scrub(input_string):
         """Clean an input string (to prevent SQL injection).
 
         Parameters
@@ -236,6 +247,10 @@ class Database(object):
                 password_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 domain_id INTEGER NOT NULL,
                 ntlm_hash TEXT NOT NULL,
+                md5_hash TEXT NOT NULL DEFAULT(''),
+                sha1_hash TEXT NOT NULL DEFAULT(''),
+                sha256_hash TEXT NOT NULL DEFAULT(''),
+                sha512_hash TEXT NOT NULL DEFAULT(''),
                 password TEXT NOT NULL DEFAULT(''),
                 length INTEGER NOT NULL DEFAULT(0),
                 upper INTEGER NOT NULL DEFAULT(0),
