@@ -115,7 +115,7 @@ class Password(object):
         WEAK_MAX = 0.333333333
 
         if self.entropy <= self.weak_bits:
-            return WEAK_MAX * self.entropy / self.weak_bits
+            return int(round((WEAK_MAX * self.entropy / self.weak_bits) * float(100), 0))
 
         HARD_BITS = self.weak_bits*3
         HARD_VAL = 0.950
@@ -137,7 +137,7 @@ class Password(object):
         k = -log((1 - HARD_VAL) / (1-WEAK_MAX), 2) / HARD_BITS
         f = lambda x: 1 - (1-WEAK_MAX)*pow(2, -k*x)
 
-        return int(round(f(self.entropy - self.weak_bits) * float(100), 0))  # with offset
+        return int(round((f(self.entropy - self.weak_bits) * float(100)), 0))  # with offset
 
     def get_leets(self, word, index=0) -> list:
         if index == 0:
