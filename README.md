@@ -1,5 +1,41 @@
 # Knows More
 
+## Getting stats
+
+```bash
+knowsmore --stats
+```
+
+This command will produce several statistics about the passwords like the output bellow
+
+```bash
+KnowsMore v0.1.4 by Helvio Junior
+Active Directory, BloodHound, NTDS hashes and Password Cracks correlation tool
+https://github.com/helviojunior/knowsmore
+    
+ [+] Startup parameters
+     command line: knowsmore --stats 
+     module: stats
+     database file: knowsmore.db
+  
+ [+] start time 2023-01-11 03:59:20
+ [?] General Top 10 passwords
++-------+-------------+-------+
+|   top | password    |   qty |
+|-------+-------------+-------|
+|     1 | password    |  1111 |
+|     2 | 123456      |   824 |
+|     3 | 123456789   |   815 |
+|     4 | guest       |   553 |
+|     5 | qwerty      |   329 |
+|     6 | 12345678    |   277 |
+|     7 | 111111      |   268 |
+|     8 | 12345       |   202 |
+|     9 | secret      |   170 |
+|    10 | sec4us      |   165 |
++-------+-------------+-------+
+```
+
 ## Installation
 
 ```bash
