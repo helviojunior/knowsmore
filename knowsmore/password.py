@@ -58,7 +58,7 @@ class Password(object):
 
     def analyze(self):
 
-        self.length = len(self.bytes_password)
+        self.length = len(self.latin_clear_text)
 
         self.lower = self.upper = self.digit = self.special = self.latin = 0
 
@@ -73,7 +73,7 @@ class Password(object):
                 # check latin
                 try:
                     b = c.encode("Latin-1")
-                    tst = b.decode("UTF-8")
+                    tst = b.decode("UTF-8") # will raise error if it is a latin data
                 except UnicodeDecodeError:
                     self.latin += 1
                     continue
@@ -175,6 +175,15 @@ class Password(object):
         return self.similarity
 
     def __str__(self):
+
+        strength = self.strength
+        s = "Weak"
+        if strength >= 66:
+            s = "Strong"
+        elif strength >= 33:
+            s = "Medium"
+
+
         return f'''NTLM........: {self.ntlm_hash}
 Clear Text..: {self.clear_text}
 Latin Text..: {self.latin_clear_text}
@@ -183,7 +192,7 @@ SHA1........: {self.sha1_hash}
 SHA256......: {self.sha256_hash}
 SHA512......: {self.sha512_hash}
 Entropy.....: {self.entropy}
-Strength....: {self.strength}
+Strength....: {strength} -> {s}
 Length......: {self.length}
 Lower.......: {self.lower}
 Upper.......: {self.upper}
