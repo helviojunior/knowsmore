@@ -60,7 +60,7 @@ class Password(object):
 
         self.length = len(self.bytes_password)
 
-        self.length = self.lower = self.upper = self.digit = self.special = self.latin = 0
+        self.lower = self.upper = self.digit = self.special = self.latin = 0
 
         # Calculate entropy
         # it raises an error if length is less than 1
