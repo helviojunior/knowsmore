@@ -176,12 +176,12 @@ MD5.........: {self.md5_hash}
 SHA1........: {self.sha1_hash}
 SHA256......: {self.sha256_hash}
 SHA512......: {self.sha512_hash}
-Entropy......: {self.entropy}
-Strength......: {self.strength}
+Entropy.....: {self.entropy}
+Strength....: {self.strength}
 Length......: {self.length}
-Lower......: {self.lower}
-Upper......: {self.upper}
-Digit......: {self.digit}
-Special......: {self.special}
-Latin......: {self.latin}
+Lower.......: {self.lower}
+Upper.......: {self.upper}
+Digit.......: {self.digit}
+Special.....: {self.special}
+Latin.......: {self.latin}
 '''
