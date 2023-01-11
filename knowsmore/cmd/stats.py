@@ -92,6 +92,27 @@ class Stats(CmdBase):
                 'rows': rows_general
             })
 
+        # General Top 10 Weaks
+        rows_weak = self.db.select_raw(
+            sql='select row_number() OVER (ORDER BY count(distinct c.credential_id) DESC) AS top, p.password, count(distinct c.credential_id) as qty '
+                'from credentials as c '
+                'inner join passwords as p '
+                'on c.password_id = p.password_id '
+                'where p.password <> "" and strength <= 33 '
+                'group by p.password '
+                'order by qty desc '
+                'LIMIT 10',
+            args=[]
+        )
+
+        if len(rows_weak) > 0:
+            data.append({
+                'type': 'top10_weak',
+                'domain': 'all',
+                'description': 'General Top 10 weak passwords',
+                'rows': rows_weak
+            })
+
         domains = self.db.select('domains')
         for r in domains:
 

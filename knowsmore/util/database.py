@@ -251,6 +251,8 @@ class Database(object):
                 sha256_hash TEXT NOT NULL DEFAULT(''),
                 sha512_hash TEXT NOT NULL DEFAULT(''),
                 password TEXT NOT NULL DEFAULT(''),
+                entropy INTEGER NOT NULL DEFAULT(0),
+                strength INTEGER NOT NULL DEFAULT(0),
                 length INTEGER NOT NULL DEFAULT(0),
                 upper INTEGER NOT NULL DEFAULT(0),
                 lower INTEGER NOT NULL DEFAULT(0),

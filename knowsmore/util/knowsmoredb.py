@@ -63,6 +63,8 @@ class KnowsMoreDB(Database):
         self.update('passwords', filter_data,
                     password=password.clear_text,
                     length=password.length,
+                    entropy=password.entropy,
+                    strength=password.strength,
                     upper=password.upper,
                     lower=password.lower,
                     digit=password.digit,
