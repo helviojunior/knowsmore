@@ -26,6 +26,7 @@ https://github.com/helviojunior/knowsmore
 |     1 | Total Users    | 95369 |
 |     2 | Unique Hashes  | 74299 |
 |     3 | Cracked Hashes | 23177 |
+|     4 | Cracked Users  | 35078 |
 +-------+----------------+-------+
 
  [?] General Top 10 passwords

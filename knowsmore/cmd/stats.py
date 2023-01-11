@@ -59,7 +59,9 @@ class Stats(CmdBase):
                 'union '
                 'select 2 as top, "Unique Hashes" as description, (select count(distinct ntlm_hash) from passwords) as qty '
                 'union '
-                'select 3 as top, "Cracked Hashes" as description, (select count(distinct ntlm_hash) from passwords where length > 0) as qty ',
+                'select 3 as top, "Cracked Hashes" as description, (select count(distinct ntlm_hash) from passwords where length > 0) as qty '
+                'union '
+                'select 4 as top, "Cracked Users" as description, (select count(distinct c.credential_id) from credentials as c inner join passwords as p on c.password_id = p.password_id where p.length > 0) as qty ',
             args=[]
         )
         data.append({
