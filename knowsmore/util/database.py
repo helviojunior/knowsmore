@@ -103,7 +103,7 @@ class Database(object):
         return data[0]
 
     @connect
-    def select_raw(self, conn, sql: str, args: tuple):
+    def select_raw(self, conn, sql: str, args: any):
         cursor = conn.execute(sql, tuple(args,))
 
         columns = cursor.description

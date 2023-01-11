@@ -72,15 +72,18 @@ class Configuration(object):
         if Configuration.verbose > 0:
             Logger.pl('     {C}verbosity level:{O} %s{W}' % Configuration.verbose)
 
+        Logger.pl('     {C}module:{O} %s{W}' % module.name)
+
         if not module.load_from_arguments(args.args):
             Configuration.mandatory()
 
         Configuration.module = module
 
-        Logger.pl('     {C}module:{O} %s{W}' % module.name)
-
         if module.check_database:
             Configuration.module.open_db(args=args.args, check=True)
+
+        db_name = os.path.abspath(args.args.dbfile.strip())
+        Logger.pl('     {C}database file:{O} %s{W}' % db_name)
 
         print('  ')
 
