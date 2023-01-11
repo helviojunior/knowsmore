@@ -4,10 +4,14 @@ import codecs
 from knowsmore.util.color import Color
 from knowsmore.util.tools import Tools
 from math import log
+from Levenshtein import ratio
+
+LEETS = {"a":"aA@49áÁàÀ","b":"bB8","c":"cCçÇ","d":"dD","e":"eE32","f":"fF","g":"gG96","h":"hH#","i":"iI!1","j":"jJ","k":"kK","l":"lL!1","m":"mM","n":"nNñÑ","o":"oO04","p":"pP","q":"qQ","r":"rR","s":"sS5$","t":"tT7+","u":"uU","v":"vV","w":"wW","x":"xX","y":"yY","z":"zZ2","0":"0","1":"1","2":"2","3":"3","4":"4","5":"5","6":"6","7":"7","8":"8","9":"9"}
 
 class Password(object):
     weak_bits = 30
     ntlm_hash = ''
+    bytes_password = bytes()
     clear_text = ''
     latin_clear_text = ''
     length = lower = upper = digit = special = latin = 0
@@ -18,37 +22,37 @@ class Password(object):
         self.ntlm_hash = ntlm_hash
         self.clear_text = clear_text
         self.latin_clear_text = clear_text
-        btxt = clear_text.encode("UTF-8")
+        self.bytes_password = clear_text.encode("UTF-8")
 
         if '$HEX[' in self.clear_text:
-            btxt = codecs.decode(self.clear_text[5:-1], 'hex_codec')
+            self.bytes_password = codecs.decode(self.clear_text[5:-1], 'hex_codec')
 
-        self.analyze(btxt)
-        self.cal_hashes(btxt)
+        self.analyze()
+        self.cal_hashes()
 
         if '$HEX[' in self.clear_text:
             try:
-                self.clear_text = btxt.decode("UTF-8")
+                self.clear_text = self.bytes_password.decode("UTF-8")
             except UnicodeDecodeError:
                 try:
-                    self.latin_clear_text = btxt.decode("Latin-1")
+                    self.latin_clear_text = self.bytes_password.decode("Latin-1")
                 except:
                     pass
 
                 Color.pl('{?} {W}{D}the password ({W}{C}%s{W}{D}) contains Latin character, '
                          'keeping HEX encoded ({W}{C}%s{W}{D}).{W}' % (self.latin_clear_text, self.clear_text))
 
-    def analyze(self, password: bytes):
+    def analyze(self):
 
-        self.length = len(password)
+        self.length = len(self.bytes_password)
 
         # Calculate entropy
         # it raises an error if length is less than 1
         if self.length > 1:
-            unique = set(password)
+            unique = set(self.bytes_password)
             self.entropy = int(round(self.length * log(len(unique), 2), 0))
 
-        for b in password:
+        for b in self.bytes_password:
             try:
 
                 c = bytes([b]).decode("UTF-8")[0]
@@ -72,15 +76,15 @@ class Password(object):
             except UnicodeDecodeError:
                 self.latin += 1
 
-    def cal_hashes(self, password: bytes):
-        self.md5_hash = hashlib.md5(password).hexdigest().lower()
-        self.sha1_hash = hashlib.sha1(password).hexdigest().lower()
-        self.sha256_hash = hashlib.sha256(password).hexdigest().lower()
-        self.sha512_hash = hashlib.sha512(password).hexdigest().lower()
+    def cal_hashes(self):
+        self.md5_hash = hashlib.md5(self.bytes_password).hexdigest().lower()
+        self.sha1_hash = hashlib.sha1(self.bytes_password).hexdigest().lower()
+        self.sha256_hash = hashlib.sha256(self.bytes_password).hexdigest().lower()
+        self.sha512_hash = hashlib.sha512(self.bytes_password).hexdigest().lower()
 
     #https://github.com/kolypto/py-password-strength/blob/master/password_strength/stats.py
     @property
-    def strength(self):
+    def strength(self) -> int:
         """ Get password strength as a number normalized to range {0 .. 100}.
         Normalization is done in the following fashion:
         1. If entropy_bits <= weak_bits   -- linear in range{0 .. 33} (weak)
@@ -120,6 +124,25 @@ class Password(object):
         f = lambda x: 1 - (1-WEAK_MAX)*pow(2, -k*x)
 
         return int(round(f(self.entropy - self.weak_bits) * float(100), 0))  # with offset
+
+    def get_leets(self, word, index=0) -> list:
+        if index == 0:
+            word = word.lower()
+        c = word[index:index + 1]
+        if c in LEETS:
+            for i, s in enumerate(LEETS.get(c)):
+                if index == len(word) - 1:
+                    p = "%s%s" % (word[0:index], s)
+                    yield p
+                else:
+                    p = "%s%s%s" % (word[0:index], s, word[index + 1:])
+                    yield from self.get_leets(p, index + 1)
+
+    def calc_ratio(self, name: str, score_cutoff: float = 0.4) -> int:
+        str_pass = self.bytes_password.decode("Latin-1")
+        return sorted(
+            [round(ratio(l1, str_pass, score_cutoff=score_cutoff) * float(100)) for l1 in self.get_leets(name)]
+        )[-1]
 
     def __str__(self):
         return f'''NTLM........: {self.ntlm_hash}

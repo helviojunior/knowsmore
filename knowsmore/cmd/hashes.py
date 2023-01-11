@@ -8,6 +8,7 @@ from enum import Enum
 from clint.textui import progress
 
 from knowsmore.cmdbase import CmdBase
+from knowsmore.config import Configuration
 from knowsmore.password import Password
 from knowsmore.util.color import Color
 from knowsmore.util.database import Database
@@ -214,12 +215,20 @@ class NTLMHash(CmdBase):
                                 ignored += 1
                                 continue
 
+                            pdata = { }
+
                             password = Password(
                                 ntlm_hash=c1[0].lower(),
                                 clear_text=c1[1]
                             )
 
-                            self.db.update_password(password)
+                            if Configuration.company != '':
+                                pdata['company_variation'] = password.calc_ratio(Configuration.company)
+
+                            self.db.update_password(
+                                password,
+                                **pdata
+                            )
 
                             try:
                                 line = f.readline()

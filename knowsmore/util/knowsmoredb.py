@@ -54,27 +54,31 @@ class KnowsMoreDB(Database):
                             membership=membership
                             )
 
-    def update_password(self, password: Password):
+    def update_password(self, password: Password, **kwargs):
 
         filter_data = {
             'ntlm_hash': password.ntlm_hash,
         }
 
-        self.update('passwords', filter_data,
-                    password=password.clear_text,
-                    length=password.length,
-                    entropy=password.entropy,
-                    strength=password.strength,
-                    upper=password.upper,
-                    lower=password.lower,
-                    digit=password.digit,
-                    special=password.special,
-                    latin=password.latin,
-                    md5_hash=password.md5_hash,
-                    sha1_hash=password.sha1_hash,
-                    sha256_hash=password.sha256_hash,
-                    sha512_hash=password.sha512_hash,
-                    )
+        pwd = {
+            'password': password.clear_text,
+            'length': password.length,
+            'entropy': password.entropy,
+            'strength': password.strength,
+            'upper': password.upper,
+            'lower': password.lower,
+            'digit': password.digit,
+            'special': password.special,
+            'latin': password.latin,
+            'md5_hash': password.md5_hash,
+            'sha1_hash': password.sha1_hash,
+            'sha256_hash': password.sha256_hash,
+            'sha512_hash': password.sha512_hash,
+        }
+
+        pwd.update(kwargs)
+
+        self.update('passwords', filter_data, **pwd)
 
     def insert_or_update_credential(self, domain: int, username: str, ntlm_hash: str,
                                     dn: str = '', groups: str = '', object_identifier: str = '',

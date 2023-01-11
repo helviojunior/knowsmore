@@ -271,6 +271,7 @@ class Database(object):
                 domain_id INTEGER NOT NULL,
                 type varchar(1) NOT NULL  DEFAULT('U'),
                 name varchar(500) NOT NULL,
+                full_name varchar(500) NOT NULL,
                 object_identifier TEXT NOT NULL DEFAULT(''),
                 dn TEXT NOT NULL DEFAULT(''),
                 groups TEXT NOT NULL DEFAULT(''),

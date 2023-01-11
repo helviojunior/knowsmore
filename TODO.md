@@ -13,6 +13,8 @@
 
 ## Analysers
 * [x] Analyse the quality of password (length , lower case, upper case, digit, special and latin)
+* [x] Analyse similarity of password with company name
+
 
 ## Finders
 * [x] Search for users

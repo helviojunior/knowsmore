@@ -15,7 +15,7 @@ setup(name='knowsmore',
       url='https://github.com/helviojunior/knowsmore',
       packages=find_packages(),
       package_data={'knowsmore': ['resources/*']},
-      install_requires=['bs4>=0.0.1', 'colorama', 'clint>=0.5.1', 'tabulate>=0.9.0'],
+      install_requires=['bs4>=0.0.1', 'colorama', 'clint>=0.5.1', 'tabulate>=0.9.0', 'Levenshtein>=0.20.9'],
       entry_points= { 'console_scripts': [
         'knowsmore=knowsmore.knowsmore:run',
         ]}

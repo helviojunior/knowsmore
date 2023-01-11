@@ -2,6 +2,7 @@
 # -*- coding: UTF-8 -*-
 import os
 import string, random, sys, re
+import unicodedata
 
 from knowsmore.util.color import Color
 
@@ -63,13 +64,17 @@ class Tools:
             return count + 1
 
     @staticmethod
-    def print_status(text: str, total: int, index: int, print_all=False):
+    def clear_string(text):
+        return ''.join(filter(Tools.permited_char, Tools.strip_accents(text))).strip().lower()
 
-        Tools.clear_line()
-        print(("%s [%s/%s]" % (text, index, total)), end='\r', flush=True)
-        return
+    @staticmethod
+    def strip_accents(text):
+        try:
+            text = unicode(text, 'utf-8')
+        except NameError:  # unicode is a default on python 3
+            pass
 
-        if print_all or index & 0xf == 0:
-            p = int((index / total) * 100)
-            Tools.clear_line()
-            print(("%s [%s/%s => %s%%]" % (text, index, total, p)), end='\r', flush=True)
+        text = unicodedata.normalize('NFD', text) \
+            .encode('ascii', 'ignore').decode("utf-8")
+
+        return str(text).strip()

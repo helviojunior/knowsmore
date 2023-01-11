@@ -10,6 +10,8 @@ from .util.color import Color
 from .util.logger import Logger
 from .util.database import Database
 from .meta import __version__
+from .util.tools import Tools
+
 
 class Configuration(object):
     ''' Stores configuration variables and functions for TKnowsMore. '''
@@ -20,6 +22,7 @@ class Configuration(object):
     verbose = 0
     module = None
     cmd_line = ''
+    company = ''
 
     @staticmethod
     def initialize():
@@ -73,6 +76,12 @@ class Configuration(object):
             Logger.pl('     {C}verbosity level:{O} %s{W}' % Configuration.verbose)
 
         Logger.pl('     {C}module:{O} %s{W}' % module.name)
+
+        if args.args.company is not None and args.args.company.strip(' .,'):
+            Configuration.company = Tools.clear_string(args.args.company)
+
+        if Configuration.company != '':
+            Logger.pl('     {C}company name:{O} %s{W}' % Configuration.company)
 
         if not module.load_from_arguments(args.args):
             Configuration.mandatory()
