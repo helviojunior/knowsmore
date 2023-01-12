@@ -6,6 +6,7 @@ import time
 from argparse import _ArgumentGroup, Namespace
 from enum import Enum
 from clint.textui import progress
+from tabulate import _table_formats, tabulate
 
 from knowsmore.cmdbase import CmdBase
 from knowsmore.config import Configuration
@@ -147,7 +148,41 @@ class NTLMHash(CmdBase):
 
             self.db.insert_password_manually(self.password, **pdata)
             Logger.pl('{+} {C}Password inserted/updated{W}')
+
+            print(' ')
+            Color.pl('{?} {W}{D}Password data:{W}')
             print(self.password)
+
+            Color.pl('{?} {W}{D}Looking for user with this password...{W}')
+
+            sql = (
+                'select c.credential_id, c.name, c.type, c.object_identifier, c.dn, d.domain_id, d.name as domain_name, d.object_identifier as domain_object_identifier, '
+                'd.dn as domain_dn, p.password, p.ntlm_hash, p.md5_hash, p.sha1_hash, p.sha256_hash, p.sha512_hash '
+                'from credentials as c '
+                'inner join passwords as p '
+                'on c.password_id = p.password_id '
+                'inner join domains as d '
+                'on c.domain_id = d.domain_id '
+                ' where p.ntlm_hash like ? '
+                ' order by c.name'
+            )
+            args = [ self.password.ntlm_hash ]
+
+            rows = self.db.select_raw(
+                sql=sql,
+                args=args
+            )
+
+            if len(rows) == 0:
+                Logger.pl('{!} {O}Password/hash inserted but none user found with this password{W}\r\n')
+                exit(0)
+
+            headers = rows[0].keys()
+            data = [item.values() for item in rows]
+
+            print(tabulate(data, headers, tablefmt='psql'))
+
+            Logger.pl('{+} {O}%s{W}{C} register found{W}' % len(rows))
 
         elif self.mode == NTLMHash.ImportMode.NTDS:
             (user_index, ntlm_hash_index) = self.get_ntds_columns()
