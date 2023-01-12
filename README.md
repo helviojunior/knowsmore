@@ -71,15 +71,15 @@ pip3 install --upgrade git+https://github.com/helviojunior/knowsmore.git#egg=kno
 
 # Execution Flow
 
-In order to get better correlated data we suggest the following execution flow:
+There is no an obligation order to import data, but to get better correlation data we suggest the following execution flow:
 
 1. Create database file
-2. Importing BloodHound files
+2. Import BloodHound files
    1. Domains
    2. Groups
    3. Users
-3. Importing NTDS file
-4. Importing cracked hashes
+3. Import NTDS file
+4. Import cracked hashes
 
 ## Create database file
 
