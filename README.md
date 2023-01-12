@@ -128,6 +128,16 @@ knowsmore --bloodhound --import-data ~/Desktop/20220912105336_users.json
 
 **Note:** The KnowsMore is able to import BloodHound ZIP File and JSON (users, domains and groups) files
 
+## Wipe sensitive data
+
+As the passwords and his hashes are extremely sensitive data, there is a module to replace the clear text passwords and respective hashes.
+
+**Note:** This command will keep all generated statistics and imported user data.
+
+```bash
+knowsmore --wipe
+```
+
 # To do
 
 [Check the TODO file](TODO.md)

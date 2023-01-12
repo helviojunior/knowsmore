@@ -31,3 +31,6 @@
 * [ ] Export data to ElasticSearch
 * [ ] Export data to Splunk
 * [ ] Export Password Spray list
+
+## Wipe
+* [x] Module to clear sensitive data (Clear text passwords and hashes) keeping statistics
