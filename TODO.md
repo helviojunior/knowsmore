@@ -1,7 +1,7 @@
 ## Importers:
 * [x] Import NTLM Hashes from NTDS file from impacket secretsdump 
 * [x] Import Cracked NTLM hashes from hashcat output file
-* [x] Import BloodHound ZIP oe JSON file
+* [x] Import BloodHound ZIP or JSON file
 * [x] Import Domain data from BloodHound
 * [x] Import User data from BloodHound
 * [x] Import Group data from BloodHound
