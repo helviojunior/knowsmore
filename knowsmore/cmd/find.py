@@ -62,10 +62,10 @@ class Find(CmdBase):
     def load_from_arguments(self, args: Namespace) -> bool:
         if args.txt_find is not None and args.txt_find.strip() != '':
             self.find_type = Find.FindMode.All
-            self.find_text = Database.scrub(args.txt_find)
+            self.find_text = args.txt_find
         elif args.txt_pwd_find is not None and args.txt_pwd_find.strip() != '':
             self.find_type = Find.FindMode.Password
-            self.find_text = Database.scrub(args.txt_pwd_find)
+            self.find_text = args.txt_pwd_find
 
         if self.find_text is None or self.find_text.strip() == '':
             Logger.pl('{!} {R}error: text is invalid {O}%s{R} {W}\r\n' % (
