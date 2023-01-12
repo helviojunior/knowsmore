@@ -69,6 +69,18 @@ https://github.com/helviojunior/knowsmore
 pip3 install --upgrade git+https://github.com/helviojunior/knowsmore.git#egg=knowsmore
 ```
 
+# Execution Flow
+
+In order to get better correlated data we suggest the following execution flow:
+
+1. Create database file
+2. Importing BloodHound files
+   1. Domains
+   2. Groups
+   3. Users
+3. Importing NTDS file
+4. Importing cracked hashes
+
 ## Create database file
 
 All data are stored in a SQLite Database
