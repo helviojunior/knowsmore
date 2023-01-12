@@ -76,7 +76,7 @@ class Wipe(CmdBase):
                                        sha1_hash=fake_data,
                                        sha256_hash=fake_data,
                                        sha512_hash=fake_data,
-                                       password=fake_data,
+                                       password=fake_data if pwd['length'] > 0 else '',
                                        )
                         count = idx
 
