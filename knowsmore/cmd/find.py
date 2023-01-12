@@ -91,6 +91,9 @@ class Find(CmdBase):
         return True
 
     def run(self):
+
+
+
         txt = f'%{self.find_text}%'
         hex = f'%{hexlify(self.find_text.encode("latin-1")).lower()}%'
         args = []

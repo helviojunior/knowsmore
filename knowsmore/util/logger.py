@@ -20,7 +20,18 @@ class Logger(object):
                     text_file.write(Color.sc(text) + '\n')
             except:
                 pass
-                
+
+    @staticmethod
+    def p(text):
+        '''Prints text using colored format.'''
+        Color.p(text)
+
+        if Logger.out_file != '':
+            try:
+                with open(Logger.out_file, "a") as text_file:
+                    text_file.write(Color.sc(text) + '\n')
+            except:
+                pass
 
     @staticmethod
     def pl_file(text):
