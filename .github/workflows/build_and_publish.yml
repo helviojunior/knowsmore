@@ -74,7 +74,7 @@ jobs:
           python setup.py sdist
 
   publish:
-    name: Publish
+    name: Publish on Live Environment
     needs: build
     runs-on: ubuntu-latest
     if:
