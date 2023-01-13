@@ -197,7 +197,7 @@ class NTLMHash(CmdBase):
 
             total = Tools.count_file_lines(self.filename)
 
-            with progress.Bar(label="Processing ", expected_size=total) as bar:
+            with progress.Bar(label=" Processing ", expected_size=total) as bar:
                 try:
                     with open(self.filename, 'r', encoding="UTF-8", errors="surrogateescape") as f:
                         line = f.readline()
@@ -266,7 +266,7 @@ class NTLMHash(CmdBase):
             ignored = 0
 
             total = Tools.count_file_lines(self.filename)
-            with progress.Bar(label="Processing ", expected_size=total) as bar:
+            with progress.Bar(label=" Processing ", expected_size=total) as bar:
                 try:
                     with open(self.filename, 'r', encoding="UTF-8", errors="surrogateescape") as f:
                         line = f.readline()

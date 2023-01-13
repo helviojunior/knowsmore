@@ -89,7 +89,6 @@ class KnowsMoreDB(Database):
                 'and p.ntlm_hash = ?',
             args=[password.ntlm_hash]
         )
-        print(credentials)
         for c in credentials:
             names = [
                 n.lower() for n in c['full_name'].split(' ')
