@@ -166,7 +166,7 @@ class NTLMHash(CmdBase):
                 ' where p.ntlm_hash like ? '
                 ' order by c.name'
             )
-            args = [ self.password.ntlm_hash ]
+            args = [self.password.ntlm_hash]
 
             rows = self.db.select_raw(
                 sql=sql,

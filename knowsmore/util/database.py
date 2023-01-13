@@ -262,7 +262,6 @@ class Database(object):
                 special INTEGER NOT NULL DEFAULT(0),
                 latin INTEGER NOT NULL DEFAULT(0),
                 company_similarity INTEGER NOT NULL DEFAULT(0),
-                user_data_similarity INTEGER NOT NULL DEFAULT(0),
                 UNIQUE(domain_id, ntlm_hash)
             );
         """)
@@ -278,6 +277,7 @@ class Database(object):
                 dn TEXT NOT NULL DEFAULT(''),
                 groups TEXT NOT NULL DEFAULT(''),
                 password_id INTEGER NOT NULL,
+                user_data_similarity INTEGER NOT NULL DEFAULT(0),
                 insert_date datetime not null DEFAULT (datetime('now','localtime')),
                 FOREIGN KEY(domain_id) REFERENCES domains(domain_id),
                 FOREIGN KEY(password_id) REFERENCES passwords(password_id),

@@ -106,6 +106,20 @@ class Bloodhound(CmdBase):
             Logger.pl("{!} {C}Interrupted by user{W}")
             raise e
 
+    def get_version(self, meta_data):
+        version = meta_data.get('version', None)
+        if version is None:
+            return False
+
+        version = int(version)
+
+        # filter supported versions
+        if version == 4 \
+                or version == 5:
+            return int(version)
+
+        return False
+
     def parse_file(self, filename):
 
         with open(filename, 'r', encoding="UTF-8", errors="surrogateescape") as f:
@@ -114,16 +128,21 @@ class Bloodhound(CmdBase):
             meta = json_data.get('meta', {})
             type = meta.get('type', None)
             qty = meta.get('count', None)
-            version = meta.get('version', None)
+            version = self.get_version(meta)
 
             if type is None or version is None:
                 Logger.pl('{!} {R}error: BloodHound filename is invalid {O}%s{R} {W}\r\n' % (
                     filename))
                 Tools.exit_gracefully(1)
 
+            if not version:
+                Logger.pl('{!} {R}error: Unsupported BloodHound Version {O}%s{R} {W}\r\n' % (
+                    version))
+                Tools.exit_gracefully(1)
+
             # Domains
             if type.lower() == "domains":
-                if str(version) == "4":
+                if version >= 4:
                     Color.pl('{?} {W}{D}importing domains...{W}')
                     data = json_data.get('data', [])
                     with progress.Bar(label="Processing ", expected_size=qty) as bar:
@@ -162,7 +181,7 @@ class Bloodhound(CmdBase):
             elif type.lower() == "groups":
                 groups = {}
 
-                if str(version) == "4":
+                if version >= 4:
                     Color.pl('{?} {W}{D}loading groups...{W}')
                     data = json_data.get('data', [])
                     with progress.Bar(label="Processing ", expected_size=qty) as bar:
@@ -269,7 +288,7 @@ class Bloodhound(CmdBase):
 
             #Users
             elif type.lower() == "users":
-                if str(version) == "4":
+                if version >= 4:
 
                     Color.pl('{?} {W}{D}loading groups from db...{W}' + ' ' * 50)
                     user_groups = {}

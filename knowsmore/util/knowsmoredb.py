@@ -80,6 +80,30 @@ class KnowsMoreDB(Database):
 
         self.update('passwords', filter_data, **pwd)
 
+        # Get all credentials (user/computer) using this password
+        credentials = self.select_raw(
+            sql='select distinct c.credential_id, c.name, c.full_name, c.user_data_similarity from credentials as c '
+                'inner join passwords as p on c.password_id = p.password_id '
+                'where c.type = "U" '
+                'and c.full_name != "" '
+                'and p.ntlm_hash = ?',
+            args=[password.ntlm_hash]
+        )
+        print(credentials)
+        for c in credentials:
+            names = [
+                n.lower() for n in c['full_name'].split(' ')
+                if len(n) > 3
+            ]
+            score = sorted(
+                [password.calc_ratio(n) for n in names]
+            )[-1]
+            if int(c['user_data_similarity']) != int(score):
+                self.update('credentials',
+                            filter_data={'credential_id': c['credential_id']},
+                            user_data_similarity=score
+                            )
+
     def insert_password_manually(self, password: Password, **kwargs):
 
         for row in self.select('domains'):
