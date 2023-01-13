@@ -18,7 +18,6 @@ from knowsmore.util.tools import Tools
 
 
 class NTLMHash(CmdBase):
-
     class ImportMode(Enum):
         Undefined = 0
         NTDS = 1
@@ -38,7 +37,8 @@ class NTLMHash(CmdBase):
                            action='store',
                            default='secretsdump',
                            dest=f'file_format',
-                           help=Color.s('Specify NTLM hashes format (default: {G}secretsdump{W}). Available methods: {G}secretsdump{W}'))
+                           help=Color.s(
+                               'Specify NTLM hashes format (default: {G}secretsdump{W}). Available methods: {G}secretsdump{W}'))
 
     def add_commands(self, cmds: _ArgumentGroup):
         cmds.add_argument('--import-ntds',
@@ -265,6 +265,18 @@ class NTLMHash(CmdBase):
             count = 0
             ignored = 0
 
+            if Configuration.company == '':
+                Logger.pl(
+                    '{!} {W}It is recommended import cracked passwords using the parameter {O}--company{W} because '
+                    'the KnowsMore will calculate the score of similarity of the passwords and Company Name.'
+                    )
+                Logger.p(
+                    '{!} {W}Do you want continue without inform company name? (y/N): {W}')
+                c = input()
+                if c.lower() != 'y':
+                    exit(0)
+                print(' ')
+
             total = Tools.count_file_lines(self.filename)
             with progress.Bar(label=" Processing ", expected_size=total) as bar:
                 try:
@@ -360,4 +372,3 @@ class NTLMHash(CmdBase):
             Tools.exit_gracefully(1)
 
         return user_index, ntlm_hash_index
-

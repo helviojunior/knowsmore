@@ -66,7 +66,7 @@ https://github.com/helviojunior/knowsmore
 ## Installation
 
 ```bash
-pip3 install --upgrade git+https://github.com/helviojunior/knowsmore.git#egg=knowsmore
+pip3 install --upgrade knowsmore
 ```
 
 # Execution Flow
