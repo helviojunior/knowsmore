@@ -4,10 +4,8 @@
 name: Build KnowsMore
 
 on:
-    push:
-      branches: [ main ]
-    pull_request:
-      branches: [ main ]
+  release:
+    types: [published]
 
 jobs:
   lint:
@@ -80,3 +78,9 @@ jobs:
         with:
           password: ${{ secrets.test_pypi_password }}
           repository_url: https://test.pypi.org/legacy/
+
+      - name: Publish package in Live Environment
+        #if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.prod_pypi_password }}
