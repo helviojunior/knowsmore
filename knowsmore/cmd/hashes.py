@@ -236,14 +236,27 @@ class NTLMHash(CmdBase):
                             if domain == '' or usr == '' or hash == '':
                                 self.print_verbose(f'Line ignored: {line}')
 
-                            didx = self.db.insert_or_get_domain(domain)
-                            if didx == -1:
+                            # try to locate this host previously imported by BloodHound
+                            domain_id = -1
+                            if domain == 'default':
+                                d = self.db.select_raw(
+                                    sql="select c.domain_id from credentials as c "
+                                        "where name = ? and domain_id <> 1 and type = ?",
+                                    args=[usr, type]
+                                )
+                                if len(d) == 1:  # Not permit duplicity
+                                    domain_id = d[0]['domain_id']
+
+                            if domain_id == -1:
+                                domain_id = self.db.insert_or_get_domain(domain)
+
+                            if domain_id == -1:
                                 Tools.clear_line()
                                 Logger.pl('{!} {R}error: Was not possible to import the domain {O}%s{R}\r\n' % domain)
                                 Tools.exit_gracefully(1)
 
                             self.db.insert_or_update_credential(
-                                domain=didx,
+                                domain=domain_id,
                                 username=usr,
                                 ntlm_hash=hash,
                                 type=type,

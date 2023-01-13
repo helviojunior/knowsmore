@@ -77,7 +77,8 @@ There is no an obligation order to import data, but to get better correlation da
 2. Import BloodHound files
    1. Domains
    2. Groups
-   3. Users
+   3. Computers
+   4. Users
 3. Import NTDS file
 4. Import cracked hashes
 

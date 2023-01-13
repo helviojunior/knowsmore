@@ -55,13 +55,17 @@ class Stats(CmdBase):
 
         # General Stats
         stats1 = self.db.select_raw(
-            sql='select 1 as top, "Total Users" as description, (select count(*) from credentials) as qty '
+            sql='select 1 as top, "Total Users" as description, (select count(*) from credentials where type = "U") as qty '
                 'union '
-                'select 2 as top, "Unique Hashes" as description, (select count(distinct ntlm_hash) from passwords) as qty '
+                'select 2 as top, "Total Machines" as description, (select count(*) from credentials where type = "M") as qty '
                 'union '
-                'select 3 as top, "Cracked Hashes" as description, (select count(distinct ntlm_hash) from passwords where length > 0) as qty '
+                'select 3 as top, "Unique Hashes" as description, (select count(distinct ntlm_hash) from passwords) as qty '
                 'union '
-                'select 4 as top, "Cracked Users" as description, (select count(distinct c.credential_id) from credentials as c inner join passwords as p on c.password_id = p.password_id where p.length > 0) as qty ',
+                'select 4 as top, "Cracked Hashes" as description, (select count(distinct ntlm_hash) from passwords where length > 0) as qty '
+                'union '
+                'select 5 as top, "Cracked Users" as description, (select count(distinct c.credential_id) from credentials as c inner join passwords as p on c.password_id = p.password_id where p.length > 0 and c.type = "U") as qty '
+                'union '
+                'select 6 as top, "Cracked Machines credentials" as description, (select count(distinct c.credential_id) from credentials as c inner join passwords as p on c.password_id = p.password_id where p.length > 0 and c.type = "M") as qty',
             args=[]
         )
         data.append({
@@ -70,6 +74,40 @@ class Stats(CmdBase):
             'description': 'General Statistics',
             'rows': stats1
         })
+
+        # Users/Machines by domain
+        rows_uc = self.db.select_raw(
+            sql='select row_number() OVER (ORDER BY (ifnull(sum(u.users),0) + ifnull(sum(m.machines),0)) DESC) AS top, d.name, ifnull(sum(u.users),0) as users, ifnull(sum(m.machines),0) as machines '
+                'from domains as d '
+                'left join ( '
+                '	select d.domain_id, count(distinct c1.credential_id) as users '
+                '	from domains as d '
+                '	inner join credentials as c1 '
+                '	on c1.domain_id = d.domain_id and c1.type = "U" '
+                '	group by d.domain_id '
+                '	order by users desc  '
+                ') as u on d.domain_id = u.domain_id '
+                'left join ( '
+                '	select d.domain_id, d.name, count(distinct c2.credential_id) as machines '
+                '	from domains as d '
+                '	inner join credentials as c2 '
+                '	on c2.domain_id = d.domain_id and c2.type = "M" '
+                '	group by d.domain_id, d.name  '
+                '	order by machines desc  '
+                ') as m on d.domain_id = m.domain_id '
+                'group by d.name '
+                'order by ifnull(sum(u.users),0) + ifnull(sum(m.machines),0) desc '
+                'LIMIT 10 ',
+            args=[]
+        )
+
+        if len(rows_uc) > 0:
+            data.append({
+                'type': 'users_and_computers',
+                'domain': 'all',
+                'description': 'Top 10 domains by users and computers',
+                'rows': rows_uc
+            })
 
         # General Top 10
         rows_general = self.db.select_raw(

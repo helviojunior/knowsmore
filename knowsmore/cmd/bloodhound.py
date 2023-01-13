@@ -24,6 +24,7 @@ class Bloodhound(CmdBase):
     filename = ''
     db = None
     chain_enabled = False
+    domain_cache = {}
 
     class BloodhoundFile:
         file_name = None
@@ -47,9 +48,13 @@ class Bloodhound(CmdBase):
                     self.order = 1
                 elif self.type == "groups":
                     self.order = 2
-                elif self.type == "users":
+                elif self.type == "computers":
                     self.order = 3
+                elif self.type == "users":
+                    self.order = 4
 
+            except KeyboardInterrupt as e:
+                raise e
             except:
                 pass
 
@@ -184,11 +189,67 @@ class Bloodhound(CmdBase):
             if f.type == 'groups'
         ], key=lambda x: (x.order, x.file_name), reverse=False))
 
+        # Computers
+        self.parse_computers_files(sorted([
+            f for f in files
+            if f.type == 'computers'
+        ], key=lambda x: (x.order, x.file_name), reverse=False))
+
         # Users
         self.parse_users_file(sorted([
             f for f in files
             if f.type == 'users'
         ], key=lambda x: (x.order, x.file_name), reverse=False))
+
+    def parse_computers_files(self, files: list[BloodhoundFile]):
+
+        Color.pl('{?} {W}{D}importing computers...{W}')
+
+        total = sum(f.items for f in files)
+        with progress.Bar(label=" Processing ", expected_size=total) as bar:
+            try:
+                count = 0
+                for file in files:
+                    data = file.get_json().get('data', [])
+                    for idx, dd in enumerate(data):
+                        count += 1
+                        bar.show(count)
+
+                        oid = dd.get('ObjectIdentifier', None)
+                        properties = dd.get('Properties', None)
+
+                        if oid is None or properties is None:
+                            raise Exception('Unable to parse domain data')
+
+                        name = properties.get('name', None)
+                        domain = properties.get('domain', None)
+                        dn = properties.get('distinguishedname', None)
+
+                        if name is None or domain is None or dn is None:
+                            raise Exception('Unable to parse domain data')
+
+                        name = name.lower()
+                        domain = domain.lower()
+
+                        if name.endswith(f'.{domain}'):
+                            name = name.replace(f'.{domain}', '')
+
+                        domain_id = self.get_domain(properties)
+
+                        self.db.insert_or_update_credential(
+                            domain=domain_id,
+                            username=name,
+                            groups='',
+                            object_identifier=oid,
+                            dn=dn,
+                            ntlm_hash='',
+                            type='M')
+
+            except KeyboardInterrupt as e:
+                raise e
+            finally:
+                bar.hide = True
+                Tools.clear_line()
 
     def parse_domains_files(self, files: list[BloodhoundFile]):
 
@@ -444,6 +505,9 @@ class Bloodhound(CmdBase):
         domain_name = domain_name.lower()
         domain_sid = properties.get('domainsid', '')
 
+        if domain_sid in self.domain_cache:
+            return self.domain_cache[domain_sid]
+
         domain_id = self.db.insert_or_get_domain(
             domain=domain_name,
             object_identifier=domain_sid
@@ -451,5 +515,7 @@ class Bloodhound(CmdBase):
 
         if domain_id == -1:
             raise Exception('Unable to get/create domain from JSON: %s' % json.dumps(properties))
+
+        self.domain_cache[domain_sid] = domain_id
 
         return domain_id

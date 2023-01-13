@@ -40,19 +40,20 @@ class KnowsMoreDB(Database):
         if object_identifier is None or object_identifier.strip() == '':
             raise Exception('object_identifier cannot be empty')
 
-        grp = self.select('groups',
-                          object_identifier=object_identifier
-                          )
+        #grp = self.select('groups',
+        #                  object_identifier=object_identifier
+        #                  )
 
-        if len(grp) == 0:
-            self.insert_one('groups',
-                            domain_id=domain,
-                            name=name,
-                            object_identifier=object_identifier,
-                            dn=dn,
-                            members=members,
-                            membership=membership
-                            )
+        #if len(grp) == 0:
+        #    self.insert_one('groups',
+        self.insert_ignore_one('groups',
+                               domain_id=domain,
+                               name=name,
+                               object_identifier=object_identifier,
+                               dn=dn,
+                               members=members,
+                               membership=membership
+                               )
 
     def update_password(self, password: Password, **kwargs):
 
