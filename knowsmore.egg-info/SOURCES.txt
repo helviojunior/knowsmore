@@ -31,3 +31,4 @@ knowsmore/util/knowsmoredb.py
 knowsmore/util/logger.py
 knowsmore/util/process.py
 knowsmore/util/tools.py
+tests/__init__.py
