@@ -131,5 +131,8 @@ class CmdBase(object):
 
     def get_files(self, path):
         for file in os.listdir(path):
-            if os.path.isfile(os.path.join(path, file)):
-                yield os.path.join(path, file)
+            p1 = os.path.join(path, file)
+            if os.path.isfile(p1):
+                yield p1
+            elif os.path.isdir(p1):
+                yield from self.get_files(p1)

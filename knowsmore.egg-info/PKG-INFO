@@ -1,12 +1,13 @@
 Metadata-Version: 2.1
 Name: knowsmore
-Version: 0.1.0
+Version: 0.1.15
 Summary: Active Directory, BloodHound, NTDS hashes and Password Cracks correlation tool
 Home-page: https://github.com/helviojunior/knowsmore
 Author: Hélvio Junior (M4v3r1ck)
 Author-email: helvio_junior@hotmail.com
 License: UNKNOWN
 Platform: UNKNOWN
+License-File: LICENSE
 
 UNKNOWN
 
