@@ -124,7 +124,7 @@ class Bloodhound(CmdBase):
                             if f is not None or f.strip() != ''
                         ]
                         files = []
-                        with progress.Bar(label="Parsing ", expected_size=len(t_files)) as bar:
+                        with progress.Bar(label=" Parsing ", expected_size=len(t_files)) as bar:
                             try:
                                 for idx, f in enumerate(t_files):
                                     bar.show(idx)
@@ -195,7 +195,7 @@ class Bloodhound(CmdBase):
         Color.pl('{?} {W}{D}importing domains...{W}')
 
         total = sum(f.items for f in files)
-        with progress.Bar(label="Processing ", expected_size=total) as bar:
+        with progress.Bar(label=" Processing ", expected_size=total) as bar:
             try:
                 count = 0
                 for file in files:
@@ -233,7 +233,7 @@ class Bloodhound(CmdBase):
         Color.pl('{?} {W}{D}loading groups...{W}')
 
         total = sum(f.items for f in files)
-        with progress.Bar(label="Processing ", expected_size=total) as bar:
+        with progress.Bar(label=" Processing ", expected_size=total) as bar:
             try:
                 count = 0
                 for file in files:
@@ -281,7 +281,7 @@ class Bloodhound(CmdBase):
 
             Color.pl('{?} {W}{D}calculating group chain...{W}' + ' ' * 50)
             cnt = len(groups)
-            with progress.Bar(label="Processing ", expected_size=cnt) as bar:
+            with progress.Bar(label=" Processing ", expected_size=cnt) as bar:
                 try:
                     for idx, g in enumerate(groups):
                         bar.show(idx)
@@ -295,7 +295,7 @@ class Bloodhound(CmdBase):
                     Tools.clear_line()
 
             Color.pl('{?} {W}{D}inserting groups...{W}' + ' ' * 50)
-            with progress.Bar(label="Inserting ", expected_size=cnt) as bar:
+            with progress.Bar(label=" Inserting ", expected_size=cnt) as bar:
                 try:
                     for idx, g in enumerate(groups):
                         bar.show(idx)
@@ -323,7 +323,7 @@ class Bloodhound(CmdBase):
 
         db_groups = self.db.select('groups')
 
-        with progress.Bar(label="Loading ", expected_size=len(db_groups)) as bar:
+        with progress.Bar(label=" Loading ", expected_size=len(db_groups)) as bar:
             try:
                 for idx, row in enumerate(db_groups):
                     bar.show(idx)
@@ -352,7 +352,7 @@ class Bloodhound(CmdBase):
         Tools.clear_line()
         Color.pl('{?} {W}{D}importing users...{W}' + ' ' * 50)
         total = sum(f.items for f in files)
-        with progress.Bar(label="Processing ", expected_size=total) as bar:
+        with progress.Bar(label=" Processing ", expected_size=total) as bar:
             try:
                 count = 0
                 for file in files:
