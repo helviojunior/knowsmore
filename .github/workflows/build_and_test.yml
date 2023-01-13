@@ -10,7 +10,7 @@ on:
       branches: [ main ]
 
 jobs:
-  build-n-publish:
+  lint:
     name: Check syntaxs errors and warnings
     runs-on: ubuntu-latest
     if:
