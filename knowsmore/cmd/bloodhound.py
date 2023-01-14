@@ -7,10 +7,12 @@ import sqlite3
 import time
 import mimetypes
 import tempfile
+from enum import Enum
 from pathlib import Path
 from zipfile import ZipFile
 from argparse import _ArgumentGroup, Namespace
 from clint.textui import progress
+from neo4j import GraphDatabase, exceptions
 
 from knowsmore.cmdbase import CmdBase
 from knowsmore.password import Password
@@ -21,10 +23,16 @@ from knowsmore.util.tools import Tools
 
 
 class Bloodhound(CmdBase):
+    class ImportMode(Enum):
+        Undefined = 0
+        Import = 1
+        MarkOwned = 2
+
     filename = ''
     db = None
     chain_enabled = False
     domain_cache = {}
+    mode = ImportMode.Undefined
 
     class BloodhoundFile:
         file_name = None
@@ -32,6 +40,7 @@ class Bloodhound(CmdBase):
         items = 0
         version = 0
         order = 99999
+        bh_connection = None
 
         def __init__(self, file_name: str):
             self.file_name = file_name
@@ -62,6 +71,65 @@ class Bloodhound(CmdBase):
             with open(self.file_name, 'r', encoding="UTF-8", errors="surrogateescape") as f:
                 return json.load(f)
 
+    class BloodHoundConnection:
+
+        database=None
+
+        def __init__(self, uri, user, password, database):
+            self.driver = GraphDatabase.driver(uri, auth=(user, password))
+            try:
+                self.driver.verify_connectivity()
+
+            except exceptions.ServiceUnavailable as e:
+                raise e
+            except exceptions.AuthError as e:
+                raise e
+            except Exception as e:
+                #print(e.__class__)
+                raise e
+
+            self.database = database
+
+        def close(self):
+            self.driver.close()
+
+        def get_all_owned(self) -> list:
+            with self.driver.session(database=self.database) as session:
+                return session.execute_read(self._get_owned)
+
+        def set_owned(self, account: str, owned: bool = True):
+            with self.driver.session(database=self.database) as session:
+                return session.execute_write(self._set_owned, account, owned)
+
+        @staticmethod
+        def _get_owned(tx):
+            accounts = []
+            result = tx.run("MATCH (n) WHERE n.owned IS NOT NULL RETURN n.name as name, n.owned as owned")
+            for record in result:
+                accounts.append(
+                    {
+                        'name': record.get("name", None),
+                        'owned': record.get("owned", None),
+                    }
+                )
+            return accounts
+
+        @staticmethod
+        def _set_owned(tx, account: str, owned: bool = True):
+            result = tx.run("MATCH (n) WHERE (n.name = $account) SET n.owned = true RETURN n.name as name, n.owned as owned",
+                            account=account,
+                            owned=owned,
+                            )
+            rst = result.single()
+            if rst is None:
+                return None
+
+            ret_data = {
+                'name': rst.get("name", None),
+                'owned': rst.get("owned", None),
+            }
+            return ret_data
+
     def __init__(self):
         super().__init__('bloodhound', 'Import BloodHound files')
 
@@ -72,6 +140,30 @@ class Bloodhound(CmdBase):
                            dest=f'chain_enabled',
                            help=Color.s('Enable group chain calculation.'))
 
+        flags.add_argument('-u',
+                           action='store',
+                           metavar='[neo4j username]',
+                           type=str,
+                           default='neo4j',
+                           dest=f'neo4j_username',
+                           help=Color.s('Neo4j Username to mark host/users as owned. (default: neo4j)'))
+
+        flags.add_argument('-p',
+                           action='store',
+                           metavar='[neo4j password]',
+                           type=str,
+                           default='neo4j',
+                           dest=f'neo4j_password',
+                           help=Color.s('Neo4j Password to mark host/users as owned. (default: neo4j)'))
+
+        flags.add_argument('-d',
+                           action='store',
+                           metavar='[neo4j database]',
+                           type=str,
+                           default='neo4j',
+                           dest=f'neo4j_database',
+                           help=Color.s('Neo4j Database to mark host/users as owned. (default: neo4j)'))
+
     def add_commands(self, cmds: _ArgumentGroup):
         cmds.add_argument('--import-data',
                           action='store',
@@ -80,29 +172,65 @@ class Bloodhound(CmdBase):
                           dest=f'bhfile',
                           help=Color.s('BloodHound file. Available parses: {G}.zip{W} and {G}.json{W}'))
 
+        cmds.add_argument('--mark-owned',
+                          action='store',
+                          metavar='[neo4j host and port]',
+                          type=str,
+                          dest=f'neo4j_host',
+                          help=Color.s('BloodHound Neo4j Database. host:port'))
+
     def load_from_arguments(self, args: Namespace) -> bool:
-        if args.bhfile is None or args.bhfile.strip() == '' or not os.path.isfile(args.bhfile):
-            Logger.pl('{!} {R}error: BloodHound filename is invalid {O}%s{R} {W}\r\n' % (
-                args.bhfile))
+        if args.neo4j_host is not None and args.neo4j_host != '':
+
+            host = args.neo4j_host
+            port = 7687
+            if ':' in host:
+                (host, port) = host.split(':', 2)
+
+            try:
+                self.bh_connection = Bloodhound.BloodHoundConnection(
+                    f'bolt://{host}:{port}',
+                    args.neo4j_username,
+                    args.neo4j_password,
+                    args.neo4j_database,
+                )
+
+            except Exception as e:
+                Logger.pl('{!} {R}error: Fail to connect with Neo4j Database: {O}%s{R} {W}\r\n' % (
+                    e))
+                Tools.exit_gracefully(1)
+
+            self.mode = Bloodhound.ImportMode.MarkOwned
+
+        elif args.bhfile is not None and args.bhfile.strip() != '':
+
+            if not os.path.isfile(args.bhfile):
+                Logger.pl('{!} {R}error: BloodHound filename is invalid {O}%s{R} {W}\r\n' % (
+                    args.bhfile))
+                Tools.exit_gracefully(1)
+
+            try:
+                with open(args.bhfile, 'r') as f:
+                    # file opened for writing. write to it here
+                    pass
+            except IOError as x:
+                if x.errno == errno.EACCES:
+                    Logger.pl('{!} {R}error: could not open BloodHound file {O}permission denied{R}{W}\r\n')
+                    Tools.exit_gracefully(1)
+                elif x.errno == errno.EISDIR:
+                    Logger.pl('{!} {R}error: could not open BloodHound file {O}it is an directory{R}{W}\r\n')
+                    Tools.exit_gracefully(1)
+                else:
+                    Logger.pl('{!} {R}error: could not open BloodHound file {W}\r\n')
+                    Tools.exit_gracefully(1)
+
+            self.filename = args.bhfile
+            self.chain_enabled = args.chain_enabled
+            self.mode = Bloodhound.ImportMode.MarkOwned
+
+        if self.mode == Bloodhound.ImportMode.Undefined:
+            Logger.pl('{!} {R}error: Nor {O}--import-data{R} or {O}--mark-owned{R} was provided{W}\r\n')
             Tools.exit_gracefully(1)
-
-        try:
-            with open(args.bhfile, 'r') as f:
-                # file opened for writing. write to it here
-                pass
-        except IOError as x:
-            if x.errno == errno.EACCES:
-                Logger.pl('{!} {R}error: could not open BloodHound file {O}permission denied{R}{W}\r\n')
-                Tools.exit_gracefully(1)
-            elif x.errno == errno.EISDIR:
-                Logger.pl('{!} {R}error: could not open BloodHound file {O}it is an directory{R}{W}\r\n')
-                Tools.exit_gracefully(1)
-            else:
-                Logger.pl('{!} {R}error: could not open BloodHound file {W}\r\n')
-                Tools.exit_gracefully(1)
-
-        self.filename = args.bhfile
-        self.chain_enabled = args.chain_enabled
 
         self.db = self.open_db(args)
 
@@ -110,60 +238,92 @@ class Bloodhound(CmdBase):
 
     def run(self):
 
-        count = 0
-        try:
-            # Check file type
-            mime = mimetypes.MimeTypes().guess_type(self.filename)[0]
-            if mime == "application/zip":
-                # extract files
-                Color.pl('{?} {W}{D}BloodHound ZIP File identified, extracting...{W}')
+        if self.mode == Bloodhound.ImportMode.MarkOwned:
 
-                with self.get_temp_directory() as tmpdirname:
-                    try:
-                        with ZipFile(self.filename, 'r') as zObject:
-                            zObject.extractall(tmpdirname)
+            db_cracked = self.db.select_raw(
+                sql='select c.name, d.name as domain_name, c.type from credentials as c '
+                'inner join passwords as p '
+                'on c.password_id  = p.password_id  '
+                'inner join domains as d '
+                'on c.domain_id = d.domain_id  '
+                'where p.length > 0',
+                args=[]
+            )
 
-                        Color.pl('{?} {W}{D}checking file consistency...{W}')
-                        t_files = [
-                            f for f in self.get_files(tmpdirname)
-                            if f is not None or f.strip() != ''
-                        ]
-                        files = []
-                        with progress.Bar(label=" Parsing ", expected_size=len(t_files)) as bar:
-                            try:
-                                for idx, f in enumerate(t_files):
-                                    bar.show(idx)
-                                    f1 = Bloodhound.BloodhoundFile(f)
-                                    if f1.type != 'unknown':
-                                        files.append(f1)
-                                    else:
-                                        Color.pl('{?} {W}{D}invalid file: {G}%s{W}' % f)
+            with progress.Bar(label=" Marking as owned ", expected_size=len(db_cracked)) as bar:
+                try:
+                    for idx, row in enumerate(db_cracked):
+                        bar.show(idx)
 
-                            except KeyboardInterrupt as e:
-                                raise e
-                            finally:
-                                bar.hide = True
-                                Tools.clear_line()
+                        bh_name = f'{row["name"]}@{row["domain_name"]}'
+                        if row['type'] == "M":
+                            bh_name = f'{row["name"]}.{row["domain_name"]}'
 
-                        Color.pl('{?} {W}{O}%s{G} valid files in ZIP{W}' % len(files))
+                        self.bh_connection.set_owned(bh_name, True)
 
-                        self.parse_files(files)
+                    #print(self.bh_connection.get_all_owned())
 
-                    finally:
-                        shutil.rmtree(tmpdirname)
-            else:
-                f = Bloodhound.BloodhoundFile(self.filename)
-                if f.type == 'unknown':
-                    Logger.pl('{!} {R}error: BloodHound file is invalid {O}%s{R} {W}\r\n' % (
-                        f.file_name))
-                    Tools.exit_gracefully(1)
-                self.parse_file([f])
+                except KeyboardInterrupt as e:
+                    raise e
+                finally:
+                    bar.hide = True
+                    Tools.clear_line()
 
-        except KeyboardInterrupt as e:
-            Tools.clear_line()
-            print((" " * 180), end='\r', flush=True)
-            Logger.pl("{!} {C}Interrupted by user{W}")
-            raise e
+
+        elif self.mode == Bloodhound.ImportMode.Import:
+            try:
+                # Check file type
+                mime = mimetypes.MimeTypes().guess_type(self.filename)[0]
+                if mime == "application/zip":
+                    # extract files
+                    Color.pl('{?} {W}{D}BloodHound ZIP File identified, extracting...{W}')
+
+                    with self.get_temp_directory() as tmpdirname:
+                        try:
+                            with ZipFile(self.filename, 'r') as zObject:
+                                zObject.extractall(tmpdirname)
+
+                            Color.pl('{?} {W}{D}checking file consistency...{W}')
+                            t_files = [
+                                f for f in self.get_files(tmpdirname)
+                                if f is not None or f.strip() != ''
+                            ]
+                            files = []
+                            with progress.Bar(label=" Parsing ", expected_size=len(t_files)) as bar:
+                                try:
+                                    for idx, f in enumerate(t_files):
+                                        bar.show(idx)
+                                        f1 = Bloodhound.BloodhoundFile(f)
+                                        if f1.type != 'unknown':
+                                            files.append(f1)
+                                        else:
+                                            Color.pl('{?} {W}{D}invalid file: {G}%s{W}' % f)
+
+                                except KeyboardInterrupt as e:
+                                    raise e
+                                finally:
+                                    bar.hide = True
+                                    Tools.clear_line()
+
+                            Color.pl('{?} {W}{O}%s{G} valid files in ZIP{W}' % len(files))
+
+                            self.parse_files(files)
+
+                        finally:
+                            shutil.rmtree(tmpdirname)
+                else:
+                    f = Bloodhound.BloodhoundFile(self.filename)
+                    if f.type == 'unknown':
+                        Logger.pl('{!} {R}error: BloodHound file is invalid {O}%s{R} {W}\r\n' % (
+                            f.file_name))
+                        Tools.exit_gracefully(1)
+                    self.parse_file([f])
+
+            except KeyboardInterrupt as e:
+                Tools.clear_line()
+                print((" " * 180), end='\r', flush=True)
+                Logger.pl("{!} {C}Interrupted by user{W}")
+                raise e
 
     def parse_files(self, files: list[BloodhoundFile]):
 

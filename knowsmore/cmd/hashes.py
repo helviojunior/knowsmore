@@ -130,8 +130,7 @@ class NTLMHash(CmdBase):
                 self.filename = args.crackedfile
 
             if self.mode == NTLMHash.ImportMode.Undefined:
-                Logger.pl('{!} {R}error: Nor {O}--import-ntds{R} or {O}--import-cracked{R} was provided{W}\r\n' % (
-                    args.ntlmfile))
+                Logger.pl('{!} {R}error: Nor {O}--import-ntds{R} or {O}--import-cracked{R} was provided{W}\r\n')
                 Tools.exit_gracefully(1)
 
         self.db = self.open_db(args)
