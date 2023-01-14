@@ -90,7 +90,15 @@ All data are stored in a SQLite Database
 knowsmore --create-db
 ```
 
-## Importing NTDS file
+## Importing NTDS file - Option 1
+
+**Note:** Import hashes and clear-text passwords directly from NTDS.dit and SYSTEM registry
+
+```bash
+python ./knowsmore.py --secrets-dump -target LOCAL -ntds ~/Desktop/ntds.dit -system ~/Desktop/SYSTEM
+```
+
+## Importing NTDS file - Option 2
 
 **Note:** First use the secretsdump to extract ntds hashes with the command bellow
 
