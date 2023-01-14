@@ -611,6 +611,7 @@ class Bloodhound(CmdBase):
             finally:
                 bar.hide = True
                 Tools.clear_line()
+
     def get_user_groups(self, groups, user_groups, user_id):
         ug = user_groups.get(user_id, [])
         gids = []

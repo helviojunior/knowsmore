@@ -106,18 +106,12 @@ class KnowsMoreDB(Database):
 
     def insert_password_manually(self, password: Password, **kwargs):
 
-        for row in self.select('domains'):
+        self.insert_ignore_one('pre_computed',
+                               ntlm_hash=password.ntlm_hash,
+                               password=password.clear_text if password.length > 0 else ''
+                               )
 
-            passwd = self.select_first('passwords', domain_id=row['domain_id'], ntlm_hash=password.ntlm_hash)
-            password_id = -1 if passwd is None else passwd['password_id']
-
-            if password_id == -1:
-                self.insert_one('passwords', domain_id=row['domain_id'], ntlm_hash=password.ntlm_hash)
-                self.update_password(password, **kwargs)
-            else:
-                self.update_password(password, **kwargs)
-
-
+        self.update_password(password, **kwargs)
 
 
     def insert_or_update_credential(self, domain: int, username: str, ntlm_hash: str,

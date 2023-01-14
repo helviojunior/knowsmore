@@ -299,6 +299,20 @@ class Database(object):
             );
         """)
 
+        # criando a tabela (schema)
+        cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS [pre_computed] (
+                        password_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ntlm_hash TEXT NOT NULL,
+                        md5_hash TEXT NOT NULL DEFAULT(''),
+                        sha1_hash TEXT NOT NULL DEFAULT(''),
+                        sha256_hash TEXT NOT NULL DEFAULT(''),
+                        sha512_hash TEXT NOT NULL DEFAULT(''),
+                        password TEXT NOT NULL,
+                        UNIQUE(ntlm_hash)
+                    );
+                """)
+
         conn.commit()
 
         cursor.execute("""

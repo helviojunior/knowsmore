@@ -53,8 +53,9 @@ class Password(object):
                 except:
                     pass
 
-                Color.pl('{?} {W}{D}the password ({W}{C}%s{W}{D}) contains Latin character, '
-                         'keeping HEX encoded ({W}{C}%s{W}{D}).{W}' % (self.latin_clear_text, self.clear_text))
+                if self.length <= 50:
+                    Color.pl('{?} {W}{D}the password ({W}{C}%s{W}{D}) contains Latin character, '
+                             'keeping HEX encoded ({W}{C}%s{W}{D}).{W}' % (self.latin_clear_text, self.clear_text))
 
     def analyze(self):
 

