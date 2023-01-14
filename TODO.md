@@ -28,6 +28,7 @@
 
 ## Exporters
 * [x] Export data to JSON file
+* [x] Export all cracked credentials to BloodHound Neo4j Database as 'owned object'
 * [ ] Export data to ElasticSearch
 * [ ] Export data to Splunk
 * [ ] Export Password Spray list

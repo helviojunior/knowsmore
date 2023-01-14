@@ -151,6 +151,21 @@ As the passwords and his hashes are extremely sensitive data, there is a module 
 knowsmore --wipe
 ```
 
+## BloodHound Mark as owned
+
+Integrate all credentials cracked to Neo4j Bloodhound database
+
+```bash
+knowsmore --bloodhound --mark-owned 10.10.10.10 -d neo4j -u neo4j -p 123456
+```
+
+To remote connection make sure that Neo4j database server is accepting remote connection.
+Change the line bellow at the config file **/etc/neo4j/neo4j.conf** and restart the service.
+
+```
+server.bolt.listen_address=0.0.0.0:7687
+```
+
 # To do
 
 [Check the TODO file](TODO.md)
