@@ -90,7 +90,23 @@ All data are stored in a SQLite Database
 knowsmore --create-db
 ```
 
-## Importing NTDS file - Option 1
+
+## Importing BloodHound files
+
+```bash
+# Bloodhound ZIP File
+knowsmore --bloodhound --import-data ~/Desktop/client.zip
+
+# Bloodhound JSON File
+knowsmore --bloodhound --import-data ~/Desktop/20220912105336_users.json
+```
+
+**Note:** The KnowsMore is able to import BloodHound ZIP File and JSON (users, domains and groups) files
+
+
+## Importing NTDS file
+
+### Option 1
 
 **Note:** Import hashes and clear-text passwords directly from NTDS.dit and SYSTEM registry
 
@@ -98,7 +114,7 @@ knowsmore --create-db
 python ./knowsmore.py --secrets-dump -target LOCAL -ntds ~/Desktop/ntds.dit -system ~/Desktop/SYSTEM
 ```
 
-## Importing NTDS file - Option 2
+### Option 2
 
 **Note:** First use the secretsdump to extract ntds hashes with the command bellow
 
@@ -136,18 +152,6 @@ knowsmore --ntlm-hash --company clientCompanyName --import-cracked ~/Desktop/cra
 ```
 
 **Note:** Change **clientCompanyName** to name of your company
-
-## Importing BloodHound files
-
-```bash
-# Bloodhound ZIP File
-knowsmore --bloodhound --import-data ~/Desktop/client.zip
-
-# Bloodhound JSON File
-knowsmore --bloodhound --import-data ~/Desktop/20220912105336_users.json
-```
-
-**Note:** The KnowsMore is able to import BloodHound ZIP File and JSON (users, domains and groups) files
 
 ## Wipe sensitive data
 
