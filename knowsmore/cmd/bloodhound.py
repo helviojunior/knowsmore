@@ -226,7 +226,7 @@ class Bloodhound(CmdBase):
 
             self.filename = args.bhfile
             self.chain_enabled = args.chain_enabled
-            self.mode = Bloodhound.ImportMode.MarkOwned
+            self.mode = Bloodhound.ImportMode.Import
 
         if self.mode == Bloodhound.ImportMode.Undefined:
             Logger.pl('{!} {R}error: Nor {O}--import-data{R} or {O}--mark-owned{R} was provided{W}\r\n')
