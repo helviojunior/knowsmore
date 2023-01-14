@@ -1,5 +1,17 @@
 # Knows More
 
+## Main features
+
+* [x] Import NTLM Hashes from impacket secretsdump.py output txt file
+* [x] Import NTLM Hashes from NTDS.dit and SYSTEM
+* [x] Import Cracked NTLM hashes from hashcat output file
+* [x] Import BloodHound ZIP or JSON file
+* [x] Analyse the quality of password (length , lower case, upper case, digit, special and latin)
+* [x] Analyse similarity of password with company name
+* [x] Search for users, passwords and hashes
+* [x] Export all cracked credentials direct to BloodHound Neo4j Database as 'owned object'
+* [x] Other amazing features...
+
 ## Getting stats
 
 ```bash
