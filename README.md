@@ -7,7 +7,7 @@
 * [x] Import Cracked NTLM hashes from hashcat output file
 * [x] Import BloodHound ZIP or JSON file
 * [x] Analyse the quality of password (length , lower case, upper case, digit, special and latin)
-* [x] Analyse similarity of password with company name
+* [x] Analyse similarity of password with company and user name
 * [x] Search for users, passwords and hashes
 * [x] Export all cracked credentials direct to BloodHound Neo4j Database as 'owned object'
 * [x] Other amazing features...
