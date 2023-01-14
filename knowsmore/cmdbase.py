@@ -114,6 +114,9 @@ class CmdBase(object):
     def add_commands(self, cmds: _ArgumentGroup):
         pass
 
+    def add_groups(self, parser: ArgumentParser):
+        pass
+
     def load_from_arguments(self, args: Namespace) -> bool:
         raise Exception('Method "load_from_arguments" is not yet implemented.')
 

@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 # -*- coding: UTF-8 -*-
 from knowsmore.util.process import Process
+import codecs
 
 try:
     from .config import Configuration
@@ -83,6 +84,11 @@ class KnowsMore(object):
         Color.pl(Configuration.get_banner())
 
 def run():
+    # Explicitly changing the stdout encoding format
+    if sys.stdout.encoding is None:
+        # Output is redirected to a file
+        sys.stdout = codecs.getwriter('latin-1')(sys.stdout)
+
     o = KnowsMore()
     o.print_banner()
 
@@ -108,6 +114,3 @@ def run():
         Color.pl('\n{!} {O}interrupted, shutting down...{W}')
 
     Tools.exit_gracefully(2)
-
-if __name__ == '__main__':
-    run()

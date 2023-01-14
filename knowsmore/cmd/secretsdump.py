@@ -1,23 +1,96 @@
+# KnowsMore secretsdump.py module
+#
+# This module was adapted from secretsdump.py developed by Fortra
+# https://github.com/fortra/impacket/blob/master/examples/secretsdump.py
+#
+# Impacket - Collection of Python classes for working with network protocols.
+#
+# Copyright (C) 2022 Fortra. All rights reserved.
+#
+# This software is provided under a slightly modified version
+# of the Apache Software License. See the accompanying LICENSE file
+# for more information.
+#
+# Description:
+#   Performs various techniques to dump hashes from the
+#   remote machine without executing any agent there.
+#   For SAM and LSA Secrets (including cached creds)
+#   we try to read as much as we can from the registry
+#   and then we save the hives in the target system
+#   (%SYSTEMROOT%\\Temp dir) and read the rest of the
+#   data from there.
+#   For NTDS.dit we either:
+#       a. Get the domain users list and get its hashes
+#          and Kerberos keys using [MS-DRDS] DRSGetNCChanges()
+#          call, replicating just the attributes we need.
+#       b. Extract NTDS.dit via vssadmin executed  with the
+#          smbexec approach.
+#          It's copied on the temp dir and parsed remotely.
+#
+#   The script initiates the services required for its working
+#   if they are not available (e.g. Remote Registry, even if it is
+#   disabled). After the work is done, things are restored to the
+#   original state.
+#
+# Author from original secretsdump.py:
+#   Alberto Solino (@agsolino)
+#
+# References from original secretsdump.py:
+#   Most of the work done by these guys. I just put all
+#   the pieces together, plus some extra magic.
+#
+#   - https://github.com/gentilkiwi/kekeo/tree/master/dcsync
+#   - https://moyix.blogspot.com.ar/2008/02/syskey-and-sam.html
+#   - https://moyix.blogspot.com.ar/2008/02/decrypting-lsa-secrets.html
+#   - https://moyix.blogspot.com.ar/2008/02/cached-domain-credentials.html
+#   - https://web.archive.org/web/20130901115208/www.quarkslab.com/en-blog+read+13
+#   - https://code.google.com/p/creddump/
+#   - https://lab.mediaservice.net/code/cachedump.rb
+#   - https://insecurety.net/?p=768
+#   - https://web.archive.org/web/20190717124313/http://www.beginningtoseethelight.org/ntsecurity/index.htm
+#   - https://www.exploit-db.com/docs/english/18244-active-domain-offline-hash-dump-&-forensic-analysis.pdf
+#   - https://www.passcape.com/index.php?section=blog&cmd=details&id=15
+#
+
+
+# Impacket
+from __future__ import division
+from __future__ import print_function
+import argparse
+import codecs
+import logging
+import os
+import sys
+
+from impacket import version
+from impacket.examples import logger
+from impacket.examples.utils import parse_target
+from impacket.smbconnection import SMBConnection
+
+from impacket.examples.secretsdump import LocalOperations, RemoteOperations, SAMHashes, LSASecrets, NTDSHashes, \
+    KeyListSecrets
+from impacket.krb5.keytab import Keytab
+try:
+    input = raw_input
+except NameError:
+    pass
+
+
 import errno
 import os
 import re
-import sqlite3
-import time
 from argparse import _ArgumentGroup, Namespace
 from enum import Enum
 from clint.textui import progress
-from tabulate import _table_formats, tabulate
 
 from knowsmore.cmdbase import CmdBase
 from knowsmore.config import Configuration
 from knowsmore.password import Password
 from knowsmore.util.color import Color
-from knowsmore.util.database import Database
 from knowsmore.util.logger import Logger
 from knowsmore.util.tools import Tools
 
-
-class NTLMHash(CmdBase):
+class SecretsDump(CmdBase):
     class ImportMode(Enum):
         Undefined = 0
         NTDS = 1
@@ -30,38 +103,74 @@ class NTLMHash(CmdBase):
     password = None
 
     def __init__(self):
-        super().__init__('ntlm-hash', 'Import NTLM hashes and users')
+        super().__init__('secrets-dump', 'Import NTLM hashes and users/machines using impacket lib')
 
     def add_flags(self, flags: _ArgumentGroup):
-        flags.add_argument('-format',
-                           action='store',
-                           default='secretsdump',
-                           dest=f'file_format',
-                           help=Color.s(
-                               'Specify NTLM hashes format (default: {G}secretsdump{W}). Available methods: {G}secretsdump{W}'))
+        pass
 
     def add_commands(self, cmds: _ArgumentGroup):
-        cmds.add_argument('--import-ntds',
-                          action='store',
-                          metavar='[hashes file]',
-                          type=str,
-                          dest=f'ntlmfile',
-                          help=Color.s('NTLM hashes filename.'))
 
-        cmds.add_argument('--import-cracked',
-                          action='store',
-                          metavar='[cracked file]',
-                          type=str,
-                          dest=f'crackedfile',
-                          help=Color.s('Hashcat cracked hashes filename. (format: {G}hash{R}:{G}password{W})'))
+        cmds.add_argument('-target', action='store',
+                          help='[[domain/]username[:password]@]<targetName or address> or LOCAL'
+                               ' (if you want to parse local files)')
+        cmds.add_argument('-ts', action='store_true', help='Adds timestamp to every logging output')
+        cmds.add_argument('-debug', action='store_true', help='Turn DEBUG output ON')
+        cmds.add_argument('-system', action='store', help='SYSTEM hive to parse')
+        cmds.add_argument('-bootkey', action='store', help='bootkey for SYSTEM hive')
+        cmds.add_argument('-security', action='store', help='SECURITY hive to parse')
+        cmds.add_argument('-sam', action='store', help='SAM hive to parse')
+        cmds.add_argument('-ntds', action='store', help='NTDS.DIT file to parse')
+        cmds.add_argument('-resumefile', action='store', help='resume file name to resume NTDS.DIT session dump (only '
+                                                              'available to DRSUAPI approach). This file will also be used to keep updating the session\'s '
+                                                              'state')
+        cmds.add_argument('-outputfile', action='store',
+                          help='base output filename. Extensions will be added for sam, secrets, cached and ntds')
+        cmds.add_argument('-use-vss', action='store_true', default=False,
+                          help='Use the VSS method instead of default DRSUAPI')
+        cmds.add_argument('-rodcNo', action='store', type=int,
+                          help='Number of the RODC krbtgt account (only avaiable for Kerb-Key-List approach)')
+        cmds.add_argument('-rodcKey', action='store',
+                          help='AES key of the Read Only Domain Controller (only avaiable for Kerb-Key-List approach)')
+        cmds.add_argument('-use-keylist', action='store_true', default=False,
+                          help='Use the Kerb-Key-List method instead of default DRSUAPI')
+        cmds.add_argument('-exec-method', choices=['smbexec', 'wmiexec', 'mmcexec'], nargs='?', default='smbexec',
+                          help='Remote exec '
+                               'method to use at target (only when using -use-vss). Default: smbexec')
 
-        cmds.add_argument('--add-password',
-                          action='store',
-                          metavar='[clear text password]',
-                          type=str,
-                          default='',
-                          dest=f'password',
-                          help=Color.s('Add clear text password to database'))
+        group = cmds.add_argument_group('display options')
+        group.add_argument('-just-dc-user', action='store', metavar='USERNAME',
+                           help='Extract only NTDS.DIT data for the user specified. Only available for DRSUAPI approach. '
+                                'Implies also -just-dc switch')
+        group.add_argument('-just-dc', action='store_true', default=False,
+                           help='Extract only NTDS.DIT data (NTLM hashes and Kerberos keys)')
+        group.add_argument('-just-dc-ntlm', action='store_true', default=False,
+                           help='Extract only NTDS.DIT data (NTLM hashes only)')
+        group.add_argument('-pwd-last-set', action='store_true', default=False,
+                           help='Shows pwdLastSet attribute for each NTDS.DIT account. Doesn\'t apply to -outputfile data')
+        group.add_argument('-user-status', action='store_true', default=False,
+                           help='Display whether or not the user is disabled')
+        group.add_argument('-history', action='store_true', help='Dump password history, and LSA secrets OldVal')
+
+        group = cmds.add_argument_group('authentication')
+        group.add_argument('-hashes', action="store", metavar="LMHASH:NTHASH",
+                           help='NTLM hashes, format is LMHASH:NTHASH')
+        group.add_argument('-no-pass', action="store_true", help='don\'t ask for password (useful for -k)')
+        group.add_argument('-k', action="store_true",
+                           help='Use Kerberos authentication. Grabs credentials from ccache file '
+                                '(KRB5CCNAME) based on target parameters. If valid credentials cannot be found, it will use'
+                                ' the ones specified in the command line')
+        group.add_argument('-aesKey', action="store", metavar="hex key",
+                           help='AES key to use for Kerberos Authentication'
+                                ' (128 or 256 bits)')
+        group.add_argument('-keytab', action="store", help='Read keys for SPN from keytab file')
+
+        group = cmds.add_argument_group('connection')
+        group.add_argument('-dc-ip', action='store', metavar="ip address",
+                           help='IP Address of the domain controller. If '
+                                'ommited it use the domain part (FQDN) specified in the target parameter')
+        group.add_argument('-target-ip', action='store', metavar="ip address",
+                           help='IP Address of the target machine. If omitted it will use whatever was specified as target. '
+                                'This is useful when target is the NetBIOS name and you cannot resolve it')
 
     def load_from_arguments(self, args: Namespace) -> bool:
 

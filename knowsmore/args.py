@@ -62,6 +62,8 @@ class Arguments(object):
             commands_group = parser.add_argument_group('Available Module Commands')
             mod.add_commands(commands_group)
 
+            mod.add_groups(parser)
+
             flags = parser.add_argument_group('Module Flags')
             mod.add_flags(flags)
 
