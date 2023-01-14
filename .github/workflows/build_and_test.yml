@@ -104,6 +104,12 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt -r tests/requirements-test.txt
 
+      - name: Change Package version
+        run: |
+          oldv=$(grep -oE '[0-9\.]+' knowsmore/meta.py)
+          current=$(date '+%Y%m%d%H%M%S')
+          echo "__version__ = '${oldv}-${current}'" > knowsmore/meta.py
+
       - name: Build artifact
         run: |
           python setup.py sdist
