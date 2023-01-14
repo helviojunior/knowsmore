@@ -111,7 +111,7 @@ knowsmore --bloodhound --import-data ~/Desktop/20220912105336_users.json
 **Note:** Import hashes and clear-text passwords directly from NTDS.dit and SYSTEM registry
 
 ```bash
-python ./knowsmore.py --secrets-dump -target LOCAL -ntds ~/Desktop/ntds.dit -system ~/Desktop/SYSTEM
+knowsmore --secrets-dump -target LOCAL -ntds ~/Desktop/ntds.dit -system ~/Desktop/SYSTEM
 ```
 
 ### Option 2
