@@ -410,7 +410,7 @@ class Bloodhound(CmdBase):
             db_sync = self.db.select_raw(
                 sql='select * from bloodhound_objects '
                     'where sync_date <= updated_date '
-                    'order by updated_date ASC limit 100',
+                    'order by updated_date ASC',
                 args=[]
             )
 
