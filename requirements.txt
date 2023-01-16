@@ -1,3 +1,4 @@
+requests>=2.28.0
 bs4>=0.0.1
 colorama
 clint>=0.5.1
