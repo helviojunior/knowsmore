@@ -84,8 +84,16 @@ class Bloodhound(CmdBase):
                 return metatag.get('meta', {})
 
         def get_json(self):
-            with open(self.file_name, 'r', encoding="UTF-8", errors="surrogateescape") as f:
-                return json.load(f)
+            try:
+                with open(self.file_name, 'r', encoding="UTF-8", errors="surrogateescape") as f:
+                    return json.load(f)
+            except json.decoder.JSONDecodeError as e:
+                if 'utf-8-sig' in str(e):
+                    with open(self.file_name, 'r', encoding="utf-8-sig", errors="surrogateescape") as f:
+                        return json.load(f)
+                else:
+                    with open(self.file_name, 'r', encoding="latin-1", errors="surrogateescape") as f:
+                        return json.load(f)
 
     class BloodHoundConnection:
 
