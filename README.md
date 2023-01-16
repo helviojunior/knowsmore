@@ -118,7 +118,7 @@ knowsmore --bloodhound --import-data ~/Desktop/client.zip
 knowsmore --bloodhound --import-data ~/Desktop/20220912105336_users.json
 ```
 
-**Note:** The KnowsMore is capable to import BloodHound ZIP File and JSON files, but we recommend to use ZIP file
+**Note:** The KnowsMore is capable to import BloodHound ZIP File and JSON files, but we recommend to use ZIP file, because the KnowsMore will automatically order the files to better data correlation. 
 
 ### Sync data to Neo4j BloodHound database
 
