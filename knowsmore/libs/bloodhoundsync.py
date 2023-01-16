@@ -11,6 +11,7 @@ class BloodhoundSync:
     threads = 1
     callback = None
     per_thread_callback = None
+    inserted = []
 
     def __init__(self, callback: Any = None, per_thread_callback: Any = None, threads=2):
         if callback is None or not callable(callback):
@@ -24,6 +25,7 @@ class BloodhoundSync:
         self.q = queue.Queue()
         self.threads = threads
         self.total = 0
+        self.inserted = []
         if self.threads <= 1:
             self.threads = 1
 
@@ -33,9 +35,13 @@ class BloodhoundSync:
     def __exit__(self, exception_type, exception_value, traceback):
         self.close()
 
-    def add_item(self, item):
-        self.q.put(item)
-        self.__total += 1
+    def add_item(self, id, item) -> bool:
+        if id not in self.inserted:
+            self.inserted.append(id)
+            self.q.put(item)
+            self.__total += 1
+            return True
+        return False
 
     def start(self, **kwargs):
 
@@ -56,6 +62,11 @@ class BloodhoundSync:
 
         while self.__running:
             entry = self.q.get()
+
+            if entry is None:
+                self.q.task_done()
+                continue
+
             try:
                 self.callback(entry=entry, thread_callback_data=tcb, **kwargs)
             finally:
@@ -76,5 +87,6 @@ class BloodhoundSync:
 
     def close(self):
         self.__running = False
+        self.inserted = []
         with self.q.mutex:
             self.q.queue.clear()

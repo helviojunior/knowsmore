@@ -2,6 +2,7 @@ import datetime
 import errno
 import json
 import os
+import queue
 import re
 import shutil
 import sqlite3
@@ -356,7 +357,10 @@ class Bloodhound(CmdBase):
         with progress.Bar(label=" %s " % text, expected_size=total) as bar:
             try:
                 while sync.running:
-                    bar.show(sync.executed)
+                    ex = sync.executed
+                    if ex > total:
+                        bar.expected_size = ex
+                    bar.show(ex)
                     time.sleep(0.3)
             except KeyboardInterrupt as e:
                 raise e
@@ -405,63 +409,87 @@ class Bloodhound(CmdBase):
 
         elif self.mode == Bloodhound.ImportMode.Sync:
 
-            Color.pl('{?} {W}{D}Syncing objects, this could take a while so go grab a redbull...{W}')
+            Color.pl('{?} {W}{D}Syncing objects...{W}')
 
-            db_sync = self.db.select_raw(
-                sql='select * from bloodhound_objects '
-                    'where sync_date <= updated_date '
-                    'order by updated_date ASC',
+            db_sync_count = self.db.select_raw(
+                sql='select count(*) as qty from bloodhound_objects '
+                    'where sync_date <= updated_date',
                 args=[]
             )
+            total = int(db_sync_count[0]['qty'])
 
-            with BloodhoundSync(callback=self.bh_callback1, per_thread_callback=self.thread_start_callback, threads=6) as t:
-                t1 = threading.Thread(target=self.status, kwargs=dict(sync=t, total=len(db_sync), text="Syncing objects (step 1/4)"))
-                t1.daemon = True
-                t1.start()
+            if total > 0:
+                if total > 10000:
+                    Color.pl('{?} {W}{D}this could take a while so go grab a redbull...{W}')
 
-                t.start()
+                with BloodhoundSync(callback=self.bh_callback1, per_thread_callback=self.thread_start_callback, threads=6) as t:
+                    t.start()
 
-                try:
-                    for idx, row in enumerate(db_sync):
-                        t.add_item(row)
+                    t1 = threading.Thread(target=self.status, kwargs=dict(sync=t, total=total, text="Syncing objects (step 1/4)"))
+                    t1.daemon = True
+                    t1.start()
 
-                        if idx % 300 == 0:
-                            while t.count > 300:
-                                time.sleep(0.500)
+                    try:
 
-                    while t.executed < 1 and t.count > 0:
-                        time.sleep(0.3)
-
-                    while t.running and t.count > 0:
-                        time.sleep(0.300)
-
-                except KeyboardInterrupt as e:
-                    raise e
-                finally:
-                    t.close()
-                    Tools.clear_line()
-                    Color.pl('{?} {W}{D}Updating synced objects, wait a few seconds...{W}')
-
-                    with progress.Bar(label=" Updating synced objects (step 2/4) ", expected_size=len(self.synced)) as bar:
-                        try:
+                        while True:
                             for idx, row in enumerate(self.synced):
-                                bar.show(idx)
-
                                 self.db.update(
                                     'bloodhound_objects',
                                     filter_data={'object_id': row},
                                     sync_date=datetime.datetime.utcnow()
                                 )
+                            self.synced = []
 
-                        except KeyboardInterrupt as e:
-                            raise e
-                        finally:
-                            bar.hide = True
-                            Tools.clear_line()
+                            while t.count > 1000:
+                                time.sleep(0.3)
+
+                            db_sync = self.db.select_raw(
+                                sql='select * from bloodhound_objects '
+                                    'where sync_date <= updated_date '
+                                    'order by updated_date ASC '
+                                    'limit 10000',
+                                args=[]
+                            )
+
+                            if len(db_sync) == 0:
+                                break
+
+                            for idx, row in enumerate(db_sync):
+                                t.add_item(row['object_id'], row)
+
+                        while t.executed < 1 and t.count > 0:
+                            time.sleep(0.3)
+
+                        while t.running and t.count > 0:
+                            time.sleep(0.300)
+
+                    except KeyboardInterrupt as e:
+                        raise e
+                    finally:
+                        t.close()
+                        Tools.clear_line()
+                        Color.pl('{?} {W}{D}Updating synced objects, wait a few seconds...{W}')
+
+                        with progress.Bar(label=" Updating synced objects (step 2/4) ", expected_size=len(self.synced)) as bar:
+                            try:
+                                for idx, row in enumerate(self.synced):
+                                    bar.show(idx)
+
+                                    self.db.update(
+                                        'bloodhound_objects',
+                                        filter_data={'object_id': row},
+                                        sync_date=datetime.datetime.utcnow()
+                                    )
+
+                            except KeyboardInterrupt as e:
+                                raise e
+                            finally:
+                                bar.hide = True
+                                Tools.clear_line()
 
             self.synced = []
 
-            Color.pl('{?} {W}{D}Syncing edges, this could take a while so go grab 2 more redbulls...{W}')
+            Color.pl('{?} {W}{D}Syncing edges...{W}')
 
             db_sync_count = self.db.select_raw(
                     sql='select count(*) as qty from bloodhound_edge '
@@ -469,97 +497,75 @@ class Bloodhound(CmdBase):
                     args=[]
                 )
             total = int(db_sync_count[0]['qty'])
+            if total > 0:
+                if total > 10000:
+                    Color.pl('{?} {W}{D}this could take a while so go grab 2 more redbulls...{W}')
+                elif total > 5000:
+                    Color.pl('{?} {W}{D}this could take a while so go grab a redbull...{W}')
 
-            with BloodhoundSync(callback=self.bh_callback2, per_thread_callback=self.thread_start_callback, threads=6) as t:
-                t1 = threading.Thread(target=self.status, kwargs=dict(sync=t, total=total, text="Syncing edges (step 3/4)"))
-                t1.daemon = True
-                t1.start()
+                with BloodhoundSync(callback=self.bh_callback2, per_thread_callback=self.thread_start_callback, threads=6) as t:
+                    t.start()
 
-                t.start()
+                    t1 = threading.Thread(target=self.status, kwargs=dict(sync=t, total=total, text="Syncing edges (step 3/4)"))
+                    t1.daemon = True
+                    t1.start()
 
-                try:
-                    while True:
-                        db_sync = self.db.select_raw(
-                            sql='select * from bloodhound_edge '
-                                'where sync_date <= updated_date '
-                                'order by updated_date ASC '
-                                'limit 1000',
-                            args=[]
-                        )
-
-                        if len(db_sync) == 0:
-                            break
-
-                        for idx, row in enumerate(db_sync):
-                            t.add_item(row)
-
-                            if idx % 300 == 0:
-                                while t.count > 300:
-                                    time.sleep(0.500)
-
-                    while t.executed < 1 and t.count > 0:
-                        time.sleep(0.3)
-
-                    while t.running and t.count > 0:
-                        time.sleep(0.300)
-
-                except KeyboardInterrupt as e:
-                    raise e
-                finally:
-                    t.close()
-                    Tools.clear_line()
-                    Color.pl('{?} {W}{D}Updating synced objects, wait a few seconds...{W}')
-
-                    with progress.Bar(label=" Updating synced objects (step 4/4) ", expected_size=len(self.synced)) as bar:
-                        try:
+                    try:
+                        while True:
                             for idx, row in enumerate(self.synced):
-                                bar.show(idx)
-
                                 self.db.update(
                                     'bloodhound_edge',
                                     filter_data={'edge_id': row},
                                     sync_date=datetime.datetime.utcnow()
                                 )
+                            self.synced = []
 
-                        except KeyboardInterrupt as e:
-                            raise e
-                        finally:
-                            bar.hide = True
-                            Tools.clear_line()
+                            while t.count > 1000:
+                                time.sleep(0.3)
 
-
-
-            with progress.Bar(label=" Syncing edges (step 2/2) ", expected_size=len(db_sync)) as bar:
-                try:
-                    with self.bh_connection.get_session() as session:
-                        for idx, row in enumerate(db_sync):
-                            bar.show(idx)
-
-                            insert_query = 'UNWIND $props AS prop MERGE (n:Base {{{0}: prop.source}}) ON MATCH SET n:{1} ON CREATE SET n:{1} MERGE (m:Base {{objectid: prop.target}}) ON MATCH SET m:{2} ON CREATE SET m:{2} MERGE (n)-[r:{3} {4}]->(m)'
-                            insert_query.format(row['object_label'], row['filter_type'], row['target_label'], row['edge_type'], row['edge_props'])
-
-                            props = dict(
-                                props=dict(
-                                    map=json.loads(row['props']),
-                                    source=row['source_id'],
-                                    destination=row['destination_id']
-                                )
+                            db_sync = self.db.select_raw(
+                                sql='select * from bloodhound_edge '
+                                    'where sync_date <= updated_date '
+                                    'order by updated_date ASC '
+                                    'limit 10000',
+                                args=[]
                             )
 
-                            session.write_transaction(Bloodhound.BloodHoundConnection.execute,
-                                                      insert_query,
-                                                      **props)
+                            if len(db_sync) == 0:
+                                break
 
-                            self.db.update(
-                                'bloodhound_edge',
-                                filter_data={'edge_id': row['edge_id']},
-                                sync_date=datetime.datetime.utcnow()
-                            )
-                except KeyboardInterrupt as e:
-                    raise e
-                finally:
-                    bar.hide = True
-                    Tools.clear_line()
+                            for idx, row in enumerate(db_sync):
+                                t.add_item(row['edge_id'], row)
+
+                        while t.executed < 1 and t.count > 0:
+                            time.sleep(0.3)
+
+                        while t.running and t.count > 0:
+                            time.sleep(0.300)
+
+                    except KeyboardInterrupt as e:
+                        raise e
+                    finally:
+                        t.close()
+                        Tools.clear_line()
+                        Color.pl('{?} {W}{D}Updating synced objects, wait a few seconds...{W}')
+
+                        with progress.Bar(label=" Updating synced objects (step 4/4) ", expected_size=len(self.synced)) as bar:
+                            try:
+                                for idx, row in enumerate(self.synced):
+                                    bar.show(idx)
+
+                                    self.db.update(
+                                        'bloodhound_edge',
+                                        filter_data={'edge_id': row},
+                                        sync_date=datetime.datetime.utcnow()
+                                    )
+
+                            except KeyboardInterrupt as e:
+                                raise e
+                            finally:
+                                bar.hide = True
+                                Tools.clear_line()
 
         elif self.mode == Bloodhound.ImportMode.Import:
             try:
