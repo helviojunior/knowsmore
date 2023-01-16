@@ -135,6 +135,20 @@ class Database(object):
         return int(data[0])
 
     @connect
+    def delete(self, conn, table_name, **kwargs) -> None:
+
+        operator = self.scrub(kwargs.get('__operator', 'and'))
+
+        table_name = self.scrub(table_name)
+        (columns, values) = self.parse_args(kwargs)
+
+        sql = f"DELETE FROM {table_name}"
+        if len(columns) > 0:
+            sql += " WHERE {}".format(f' {operator} '.join([f'{col} = ?' for col in columns]))
+        conn.execute(sql, values)
+        conn.commit()
+
+    @connect
     def update(self, conn, table_name, filter_data, **kwargs):
 
         operator = self.scrub(kwargs.get('__operator', 'and'))
