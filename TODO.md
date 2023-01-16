@@ -3,6 +3,7 @@
 * [x] Import NTLM Hashes from NTDS.dit and SYSTEM
 * [x] Import Cracked NTLM hashes from hashcat output file
 * [x] Import BloodHound ZIP or JSON file
+* [X] BloodHound importer (import JSON to Neo4J without BloodHound UI)
 * [x] Import Domain data from BloodHound
 * [x] Import User data from BloodHound
 * [x] Import Group data from BloodHound
@@ -30,6 +31,7 @@
 ## Exporters
 * [x] Export data to JSON file
 * [x] Export all cracked credentials to BloodHound Neo4j Database as 'owned object'
+* [x] Export all data to BloodHound Neo4j Database (much faster than BloodHound UI)
 * [ ] Export data to ElasticSearch
 * [ ] Export data to Splunk
 * [ ] Export Password Spray list

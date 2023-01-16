@@ -6,6 +6,7 @@
 * [x] Import NTLM Hashes from NTDS.dit and SYSTEM
 * [x] Import Cracked NTLM hashes from hashcat output file
 * [x] Import BloodHound ZIP or JSON file
+* [X] BloodHound importer (import JSON to Neo4J without BloodHound UI)
 * [x] Analyse the quality of password (length , lower case, upper case, digit, special and latin)
 * [x] Analyse similarity of password with company and user name
 * [x] Search for users, passwords and hashes
@@ -107,6 +108,8 @@ knowsmore --create-db
 
 ## Importing BloodHound files
 
+We can import all full BloodHound files into KnowsMore, correlate data, and sync it to Neo4J BloodHound Database. So you can use only KnowsMore to import JSON files directly into Neo4j database instead of use `extremely slow BloodHound User Interface`
+
 ```bash
 # Bloodhound ZIP File
 knowsmore --bloodhound --import-data ~/Desktop/client.zip
@@ -115,8 +118,14 @@ knowsmore --bloodhound --import-data ~/Desktop/client.zip
 knowsmore --bloodhound --import-data ~/Desktop/20220912105336_users.json
 ```
 
-**Note:** The KnowsMore is able to import BloodHound ZIP File and JSON (users, domains and groups) files
+**Note:** The KnowsMore is capable to import BloodHound ZIP File and JSON files, but we recommend to use ZIP file
 
+### Sync data to Neo4j BloodHound database
+
+```bash
+# Bloodhound ZIP File
+knowsmore --bloodhound --sync 10..10.10.10:7687 -d neo4j -u neo4j -p 12345678
+```
 
 ## Importing NTDS file
 
