@@ -159,7 +159,7 @@ class Password(object):
                     p = "%s%s%s" % (word[0:index], s, word[index + 1:])
                     yield from self.get_leets(p, index + 1)
 
-    def calc_ratio(self, name: str, score_cutoff: float = 0.4) -> int:
+    def calc_ratio(self, name: str, score_cutoff: float = 0.2) -> int:
         if name == 0:
             name = name.lower()
 
