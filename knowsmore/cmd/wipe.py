@@ -63,6 +63,7 @@ class Wipe(CmdBase):
             count = 0
             print('')
             Color.pl('{?} {W}{D}destroying passwords data...{W}' + ' ' * 50)
+            self.db.select_raw(sql='delete from pre_computed', args=[])
             with progress.Bar(label="Processing ", expected_size=len(passwords)) as bar:
                 try:
                     for idx, pwd in enumerate(passwords):
