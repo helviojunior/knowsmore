@@ -348,38 +348,61 @@ class NTLMHash(CmdBase):
                     with open(self.filename, 'r', encoding="UTF-8", errors="surrogateescape") as f:
                         line = f.readline()
                         while line:
-                            count += 1
-                            bar.show(count)
-
-                            if line.endswith('\n'):
-                                line = line[:-1]
-                            if line.endswith('\r'):
-                                line = line[:-1]
-
-                            c1 = line.split(':', maxsplit=1)
-                            if len(c1) != 2:
-                                ignored += 1
-                                continue
-
-                            pdata = {}
-
-                            password = Password(
-                                ntlm_hash=c1[0].lower(),
-                                clear_text=c1[1]
-                            )
-
-                            if Configuration.company != '':
-                                pdata['company_similarity'] = password.calc_ratio(Configuration.company)
-
-                            self.db.update_password(
-                                password,
-                                **pdata
-                            )
-
                             try:
-                                line = f.readline()
-                            except:
-                                pass
+                                count += 1
+                                bar.show(count)
+
+                                if line.endswith('\n'):
+                                    line = line[:-1]
+                                if line.endswith('\r'):
+                                    line = line[:-1]
+
+                                c1 = line.split(':', maxsplit=1)
+                                if len(c1) != 2:
+                                    ignored += 1
+                                    continue
+
+                                if c1[0] == '':
+                                    continue
+
+                                password = Password(
+                                    ntlm_hash=c1[0].lower(),
+                                    clear_text=c1[1]
+                                )
+
+                                #verify if exists
+                                pwd = self.db.select('passwords',
+                                                     ntlm_hash=password.ntlm_hash
+                                                     )
+
+                                if len(pwd) == 0:
+                                    # insert just at pre_computed
+                                    self.db.insert_ignore_one('pre_computed',
+                                                              ntlm_hash=password.ntlm_hash,
+                                                              md5_hash=password.md5_hash,
+                                                              sha1_hash=password.sha1_hash,
+                                                              sha256_hash=password.sha256_hash,
+                                                              sha512_hash=password.sha512_hash,
+                                                              password=password.clear_text,
+                                                              )
+                                    continue
+
+                                pdata = {}
+
+                                if Configuration.company != '':
+                                    pdata['company_similarity'] = password.calc_ratio(Configuration.company)
+
+                                self.db.update_password(
+                                    password,
+                                    **pdata
+                                )
+
+                            #read next line
+                            finally:
+                                try:
+                                    line = f.readline()
+                                except:
+                                    pass
 
                 except KeyboardInterrupt as e:
                     raise e
