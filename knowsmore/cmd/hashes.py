@@ -23,6 +23,7 @@ class NTLMHash(CmdBase):
         NTDS = 1
         Cracked = 2
         Password = 3
+        ExportHashes = 4
 
     filename = ''
     db = None
@@ -41,6 +42,13 @@ class NTLMHash(CmdBase):
                                'Specify NTLM hashes format (default: {G}secretsdump{W}). Available methods: {G}secretsdump{W}'))
 
     def add_commands(self, cmds: _ArgumentGroup):
+        cmds.add_argument('--export-hashes',
+                          action='store',
+                          metavar='[hashes file]',
+                          type=str,
+                          dest=f'export_file',
+                          help=Color.s('NTLM hashes filename.'))
+
         cmds.add_argument('--import-ntds',
                           action='store',
                           metavar='[hashes file]',
@@ -75,6 +83,25 @@ class NTLMHash(CmdBase):
             )
 
             self.mode = NTLMHash.ImportMode.Password
+
+        elif args.export_file is not None and args.export_file != '':
+            try:
+                with open(args.export_file, 'a') as f:
+                    # file opened for writing. write to it here
+                    pass
+            except IOError as x:
+                if x.errno == errno.EACCES:
+                    Logger.pl('{!} {R}error: could not open NTLM hashes file {O}permission denied{R}{W}\r\n')
+                    Tools.exit_gracefully(1)
+                elif x.errno == errno.EISDIR:
+                    Logger.pl('{!} {R}error: could not open NTLM hashes file {O}it is an directory{R}{W}\r\n')
+                    Tools.exit_gracefully(1)
+                else:
+                    Logger.pl('{!} {R}error: could not open NTLM hashes file {W}\r\n')
+                    Tools.exit_gracefully(1)
+
+            self.mode = NTLMHash.ImportMode.ExportHashes
+            self.filename = args.export_file
 
         else:
             if (args.ntlmfile is None or args.ntlmfile.strip() == '') and \
@@ -138,7 +165,33 @@ class NTLMHash(CmdBase):
         return True
 
     def run(self):
-        if self.mode == NTLMHash.ImportMode.Password:
+        if self.mode == NTLMHash.ImportMode.ExportHashes:
+            rows = self.db.select_raw(
+                sql='select distinct ntlm_hash from passwords',
+                args=[]
+            )
+
+            Color.pl('{?} {W}{D}Exporting {O}%d{W} hashes...{W}' % len(rows))
+
+            try:
+                with open(self.filename, 'w', encoding="UTF-8") as f:
+                    for row in rows:
+                        f.write(f'{row["ntlm_hash"]}\n')
+                    pass
+            except IOError as x:
+                if x.errno == errno.EACCES:
+                    Logger.pl('{!} {R}error: could not open NTLM hashes file {O}permission denied{R}{W}\r\n')
+                    Tools.exit_gracefully(1)
+                elif x.errno == errno.EISDIR:
+                    Logger.pl('{!} {R}error: could not open NTLM hashes file {O}it is an directory{R}{W}\r\n')
+                    Tools.exit_gracefully(1)
+                else:
+                    Logger.pl('{!} {R}error: could not open NTLM hashes file {W}\r\n')
+                    Tools.exit_gracefully(1)
+
+            Logger.pl('{+} {O}%d{W}{C} exported to {G}%s{W}' % (len(rows), self.filename))
+
+        elif self.mode == NTLMHash.ImportMode.Password:
 
             pdata = {}
 
