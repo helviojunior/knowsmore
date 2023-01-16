@@ -1,9 +1,11 @@
 #!/usr/bin/python3
 # -*- coding: UTF-8 -*-
-
+import datetime
 import sys, os.path
 import sqlite3
 import string, base64
+import json
+import hashlib
 from sqlite3 import Connection, OperationalError, IntegrityError, ProgrammingError
 
 from .color import Color
@@ -46,7 +48,7 @@ class KnowsMoreDB(Database):
 
         #if len(grp) == 0:
         #    self.insert_one('groups',
-        self.insert_ignore_one('groups',
+        self.insert_update_one('groups',
                                domain_id=domain,
                                name=name,
                                object_identifier=object_identifier,
@@ -113,6 +115,38 @@ class KnowsMoreDB(Database):
 
         self.update_password(password, **kwargs)
 
+    def insert_or_update_bloodhound_object(self, label:str, object_id: str, filter_type: str = 'objectid',  **props):
+        self.insert_update_one(
+            'bloodhound_objects',
+            object_id=object_id,
+            filter_type=filter_type,
+            object_label=label,
+            updated_date=datetime.datetime.utcnow(),
+            props=json.dumps(props)
+        )
+
+    def insert_or_update_bloodhound_edge(self, source: str, target: str, source_label: str, target_label: str,
+                                         edge_type: str, edge_props: str, filter_type: str = 'objectid',
+                                         props: dict = {}):
+
+        txt_props = json.dumps(props)
+        checksum = hashlib.md5(
+            f'{source_label}:{target_label}:{edge_type}:{source}:{target}:{txt_props}'.encode("UTF-8")
+        ).hexdigest().lower()
+
+        self.insert_update_one(
+            'bloodhound_edge',
+            edge_id=checksum,
+            source_id=source,
+            destination_id=target,
+            edge_props=edge_props,
+            source_label=source_label,
+            target_label=target_label,
+            edge_type=edge_type,
+            source_filter_type=filter_type,
+            updated_date=datetime.datetime.utcnow(),
+            props=txt_props
+        )
 
     def insert_or_update_credential(self, domain: int, username: str, ntlm_hash: str,
                                     dn: str = '', groups: str = '', object_identifier: str = '',

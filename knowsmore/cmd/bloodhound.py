@@ -1,9 +1,11 @@
+import datetime
 import errno
 import json
 import os
 import re
 import shutil
 import sqlite3
+import threading
 import time
 import mimetypes
 import tempfile
@@ -12,9 +14,11 @@ from pathlib import Path
 from zipfile import ZipFile
 from argparse import _ArgumentGroup, Namespace
 from clint.textui import progress
-from neo4j import GraphDatabase, exceptions
+from neo4j import GraphDatabase, exceptions, Session, Transaction
+from neo4j.exceptions import ClientError
 
 from knowsmore.cmdbase import CmdBase
+from knowsmore.libs.bloodhoundsync import BloodhoundSync
 from knowsmore.password import Password
 from knowsmore.util.color import Color
 from knowsmore.util.database import Database
@@ -27,12 +31,14 @@ class Bloodhound(CmdBase):
         Undefined = 0
         Import = 1
         MarkOwned = 2
+        Sync = 3
 
     filename = ''
     db = None
     chain_enabled = False
     domain_cache = {}
     mode = ImportMode.Undefined
+    synced = []
 
     class BloodhoundFile:
         file_name = None
@@ -46,9 +52,9 @@ class Bloodhound(CmdBase):
             self.file_name = file_name
 
             try:
-                json_data = self.get_json()
+                #json_data = self.get_json()
 
-                meta = json_data.get('meta', {})
+                meta = self.get_meta()
                 self.type = meta.get('type', 'unknown').lower()
                 self.items = meta.get('count', 0)
                 self.version = meta.get('version', 0)
@@ -67,13 +73,22 @@ class Bloodhound(CmdBase):
             except:
                 pass
 
+        def get_meta(self):
+            with open(self.file_name, 'rb') as js:
+                # Obtain meta tag
+                js.seek(-0x100, os.SEEK_END)
+                lastbytes = str(js.read(0x100))
+                metatagstr = re.search('("meta":(\s+)?{.*})}', lastbytes, re.MULTILINE | re.IGNORECASE).group(1)
+                metatag = json.loads('{' + metatagstr + '}')
+                return metatag.get('meta', {})
+
         def get_json(self):
             with open(self.file_name, 'r', encoding="UTF-8", errors="surrogateescape") as f:
                 return json.load(f)
 
     class BloodHoundConnection:
 
-        database=None
+        database = None
 
         def __init__(self, uri, user, password, database):
             self.driver = GraphDatabase.driver(uri, auth=(user, password))
@@ -101,8 +116,15 @@ class Bloodhound(CmdBase):
             with self.driver.session(database=self.database) as session:
                 return session.execute_write(self._set_owned, account, owned)
 
+        def get_session(self) -> Session:
+            return self.driver.session(database=self.database)
+
         @staticmethod
-        def _get_owned(tx):
+        def execute(tx: Transaction, query, **data):
+            tx.run(query, **data)
+
+        @staticmethod
+        def _get_owned(tx: Transaction):
             accounts = []
             result = tx.run("MATCH (n) WHERE n.owned IS NOT NULL RETURN n.name as name, n.owned as owned")
             for record in result:
@@ -115,10 +137,9 @@ class Bloodhound(CmdBase):
             return accounts
 
         @staticmethod
-        def _set_owned(tx, account: str, owned: bool = True):
-            result = tx.run("MATCH (n) WHERE (n.name = $account) SET n.owned = true RETURN n.name as name, n.owned as owned",
-                            account=account,
-                            owned=owned,
+        def _set_owned(tx: Transaction, account: str, owned: bool = True):
+            result = tx.run("UNWIND $props AS prop MERGE (n:Base {objectid: prop.source}) SET n += prop.map RETURN n.name as name, n.owned as owned LIMIT 1",
+                            props=dict(source=account, owned=owned)
                             )
             rst = result.single()
             if rst is None:
@@ -129,6 +150,29 @@ class Bloodhound(CmdBase):
                 'owned': rst.get("owned", None),
             }
             return ret_data
+
+        def add_constraints(self):
+            with self.driver.session(database=self.database) as session:
+                return session.execute_write(self._add_constraints)
+
+        @staticmethod
+        def _add_constraints(tx: Transaction):
+            """Adds bloodhound contraints to neo4j
+
+            Arguments:
+                tx {neo4j.Transaction} -- Neo4j transaction.
+            """
+            tx.run('CREATE CONSTRAINT base_objectid_unique ON (b:Base) ASSERT b.objectid IS UNIQUE')
+            tx.run('CREATE CONSTRAINT computer_objectid_unique ON (c:Computer) ASSERT c.objectid IS UNIQUE')
+            tx.run('CREATE CONSTRAINT domain_objectid_unique ON (d:Domain) ASSERT d.objectid IS UNIQUE')
+            tx.run('CREATE CONSTRAINT group_objectid_unique ON (g:Group) ASSERT g.objectid IS UNIQUE')
+            tx.run('CREATE CONSTRAINT user_objectid_unique ON (u:User) ASSERT u.objectid IS UNIQUE')
+            tx.run("CREATE CONSTRAINT ON (c:User) ASSERT c.name IS UNIQUE")
+            tx.run("CREATE CONSTRAINT ON (c:Computer) ASSERT c.name IS UNIQUE")
+            tx.run("CREATE CONSTRAINT ON (c:Group) ASSERT c.name IS UNIQUE")
+            tx.run("CREATE CONSTRAINT ON (c:Domain) ASSERT c.name IS UNIQUE")
+            tx.run("CREATE CONSTRAINT ON (c:OU) ASSERT c.guid IS UNIQUE")
+            tx.run("CREATE CONSTRAINT ON (c:GPO) ASSERT c.name IS UNIQUE")
 
     def __init__(self):
         super().__init__('bloodhound', 'Import BloodHound files')
@@ -179,10 +223,24 @@ class Bloodhound(CmdBase):
                           dest=f'neo4j_host',
                           help=Color.s('BloodHound Neo4j Database. host:port'))
 
+        cmds.add_argument('--sync-to',
+                          action='store',
+                          metavar='[neo4j host and port]',
+                          type=str,
+                          dest=f'neo4j_host2',
+                          help=Color.s('BloodHound Neo4j Database. host:port'))
+
     def load_from_arguments(self, args: Namespace) -> bool:
-        if args.neo4j_host is not None and args.neo4j_host != '':
+        if (args.neo4j_host is not None and args.neo4j_host != '') or \
+                (args.neo4j_host2 is not None and args.neo4j_host2 != ''):
 
             host = args.neo4j_host
+            self.mode = Bloodhound.ImportMode.MarkOwned
+
+            if args.neo4j_host2 is not None and args.neo4j_host2 != '':
+                self.mode = Bloodhound.ImportMode.Sync
+                host = args.neo4j_host2
+
             port = 7687
             if ':' in host:
                 (host, port) = host.split(':', 2)
@@ -200,7 +258,14 @@ class Bloodhound(CmdBase):
                     e))
                 Tools.exit_gracefully(1)
 
-            self.mode = Bloodhound.ImportMode.MarkOwned
+            try:
+                self.bh_connection.add_constraints()
+            except ClientError:
+                pass
+            except Exception as e:
+                Logger.pl('{!} {R}error: Fail adding BloodHound constraints Neo4j Database: {O}%s{R} {W}\r\n' % (
+                    e))
+                Tools.exit_gracefully(1)
 
         elif args.bhfile is not None and args.bhfile.strip() != '':
 
@@ -234,11 +299,80 @@ class Bloodhound(CmdBase):
 
         self.db = self.open_db(args)
 
+        Logger.pl('     {C}operational mode:{O} %s{W}' % self.mode)
+
         return True
+
+    def thread_start_callback(self, index, **kwargs):
+        return self.bh_connection.get_session()
+
+    def bh_callback1(self, entry, thread_callback_data, **kwargs):
+        #print(entry, thread_callback_data)
+
+        query = 'UNWIND $props AS prop MERGE (n:{1} {{{0}: prop.source}}) ON MATCH SET n:{0} ON CREATE SET n:{0} SET n += prop.map'
+        query = query.format(entry['object_label'], entry['filter_type'])
+
+        props = dict(
+            props=dict(
+                map=json.loads(entry['props']),
+                source=entry['object_id']
+            )
+        )
+
+        thread_callback_data.write_transaction(
+            Bloodhound.BloodHoundConnection.execute,
+            query,
+            **props)
+
+        self.synced.append(str(entry['object_id']))
+
+    def bh_callback2(self, entry, thread_callback_data, **kwargs):
+
+        # Merge source and target object too
+        #insert_query = 'UNWIND $props AS prop MERGE (n:Base {{{0}: prop.source}}) ON MATCH SET n:{1} ON CREATE SET n:{1} MERGE (m:Base {{objectid: prop.target}}) ON MATCH SET m:{2} ON CREATE SET m:{2} MERGE (n)-[r:{3} {4}]->(m)'
+
+        # Merge only the relationship from source and target
+        insert_query = 'UNWIND $props AS prop MATCH (n:Base {{{0}: prop.source}}) MATCH (m:Base {{objectid: prop.target}}) MERGE (n)-[r:{3} {4}]->(m)'
+
+        #Replace all tags
+        insert_query = insert_query.format(entry['source_filter_type'],
+                                           entry['source_label'],
+                                           entry['target_label'],
+                                           entry['edge_type'],
+                                           entry['edge_props'])
+
+        props = dict(
+            props=json.loads(entry['props']),
+        )
+
+        thread_callback_data.write_transaction(
+            Bloodhound.BloodHoundConnection.execute,
+            insert_query,
+            **props)
+
+        self.synced.append(str(entry['edge_id']))
+
+    def status(self, text, sync, total):
+        with progress.Bar(label=" %s " % text, expected_size=total) as bar:
+            try:
+                while sync.running:
+                    bar.show(sync.executed)
+                    time.sleep(0.3)
+            except KeyboardInterrupt as e:
+                raise e
+            except:
+                pass
+            finally:
+                bar.hide = True
+                Tools.clear_line()
+                sync.close()
+
+        return
 
     def run(self):
 
         if self.mode == Bloodhound.ImportMode.MarkOwned:
+            Color.pl('{?} {W}{D}Syncing owned objects...{W}')
 
             db_cracked = self.db.select_raw(
                 sql='select c.name, d.name as domain_name, c.type from credentials as c '
@@ -269,6 +403,163 @@ class Bloodhound(CmdBase):
                     bar.hide = True
                     Tools.clear_line()
 
+        elif self.mode == Bloodhound.ImportMode.Sync:
+
+            Color.pl('{?} {W}{D}Syncing objects, this could take a while so go grab a redbull...{W}')
+
+            db_sync = self.db.select_raw(
+                sql='select * from bloodhound_objects '
+                    'where sync_date <= updated_date '
+                    'order by updated_date ASC limit 100',
+                args=[]
+            )
+
+            with BloodhoundSync(callback=self.bh_callback1, per_thread_callback=self.thread_start_callback, threads=6) as t:
+                t1 = threading.Thread(target=self.status, kwargs=dict(sync=t, total=len(db_sync), text="Syncing objects (step 1/4)"))
+                t1.daemon = True
+                t1.start()
+
+                t.start()
+
+                try:
+                    for idx, row in enumerate(db_sync):
+                        t.add_item(row)
+
+                        if idx % 300 == 0:
+                            while t.count > 300:
+                                time.sleep(0.500)
+
+                    while t.executed < 1 and t.count > 0:
+                        time.sleep(0.3)
+
+                    while t.running and t.count > 0:
+                        time.sleep(0.300)
+
+                except KeyboardInterrupt as e:
+                    raise e
+                finally:
+                    t.close()
+                    Tools.clear_line()
+                    Color.pl('{?} {W}{D}Updating synced objects, wait a few seconds...{W}')
+
+                    with progress.Bar(label=" Updating synced objects (step 2/4) ", expected_size=len(self.synced)) as bar:
+                        try:
+                            for idx, row in enumerate(self.synced):
+                                bar.show(idx)
+
+                                self.db.update(
+                                    'bloodhound_objects',
+                                    filter_data={'object_id': row},
+                                    sync_date=datetime.datetime.utcnow()
+                                )
+
+                        except KeyboardInterrupt as e:
+                            raise e
+                        finally:
+                            bar.hide = True
+                            Tools.clear_line()
+
+            self.synced = []
+
+            Color.pl('{?} {W}{D}Syncing edges, this could take a while so go grab 2 more redbulls...{W}')
+
+            db_sync_count = self.db.select_raw(
+                    sql='select count(*) as qty from bloodhound_edge '
+                        'where sync_date <= updated_date',
+                    args=[]
+                )
+            total = int(db_sync_count[0]['qty'])
+
+            with BloodhoundSync(callback=self.bh_callback2, per_thread_callback=self.thread_start_callback, threads=6) as t:
+                t1 = threading.Thread(target=self.status, kwargs=dict(sync=t, total=total, text="Syncing edges (step 3/4)"))
+                t1.daemon = True
+                t1.start()
+
+                t.start()
+
+                try:
+                    while True:
+                        db_sync = self.db.select_raw(
+                            sql='select * from bloodhound_edge '
+                                'where sync_date <= updated_date '
+                                'order by updated_date ASC '
+                                'limit 1000',
+                            args=[]
+                        )
+
+                        if len(db_sync) == 0:
+                            break
+
+                        for idx, row in enumerate(db_sync):
+                            t.add_item(row)
+
+                            if idx % 300 == 0:
+                                while t.count > 300:
+                                    time.sleep(0.500)
+
+                    while t.executed < 1 and t.count > 0:
+                        time.sleep(0.3)
+
+                    while t.running and t.count > 0:
+                        time.sleep(0.300)
+
+                except KeyboardInterrupt as e:
+                    raise e
+                finally:
+                    t.close()
+                    Tools.clear_line()
+                    Color.pl('{?} {W}{D}Updating synced objects, wait a few seconds...{W}')
+
+                    with progress.Bar(label=" Updating synced objects (step 4/4) ", expected_size=len(self.synced)) as bar:
+                        try:
+                            for idx, row in enumerate(self.synced):
+                                bar.show(idx)
+
+                                self.db.update(
+                                    'bloodhound_edge',
+                                    filter_data={'edge_id': row},
+                                    sync_date=datetime.datetime.utcnow()
+                                )
+
+                        except KeyboardInterrupt as e:
+                            raise e
+                        finally:
+                            bar.hide = True
+                            Tools.clear_line()
+
+
+
+            with progress.Bar(label=" Syncing edges (step 2/2) ", expected_size=len(db_sync)) as bar:
+                try:
+                    with self.bh_connection.get_session() as session:
+                        for idx, row in enumerate(db_sync):
+                            bar.show(idx)
+
+                            insert_query = 'UNWIND $props AS prop MERGE (n:Base {{{0}: prop.source}}) ON MATCH SET n:{1} ON CREATE SET n:{1} MERGE (m:Base {{objectid: prop.target}}) ON MATCH SET m:{2} ON CREATE SET m:{2} MERGE (n)-[r:{3} {4}]->(m)'
+                            insert_query.format(row['object_label'], row['filter_type'], row['target_label'], row['edge_type'], row['edge_props'])
+
+                            props = dict(
+                                props=dict(
+                                    map=json.loads(row['props']),
+                                    source=row['source_id'],
+                                    destination=row['destination_id']
+                                )
+                            )
+
+                            session.write_transaction(Bloodhound.BloodHoundConnection.execute,
+                                                      insert_query,
+                                                      **props)
+
+                            self.db.update(
+                                'bloodhound_edge',
+                                filter_data={'edge_id': row['edge_id']},
+                                sync_date=datetime.datetime.utcnow()
+                            )
+                except KeyboardInterrupt as e:
+                    raise e
+                finally:
+                    bar.hide = True
+                    Tools.clear_line()
 
         elif self.mode == Bloodhound.ImportMode.Import:
             try:
@@ -317,7 +608,7 @@ class Bloodhound(CmdBase):
                         Logger.pl('{!} {R}error: BloodHound file is invalid {O}%s{R} {W}\r\n' % (
                             f.file_name))
                         Tools.exit_gracefully(1)
-                    self.parse_file([f])
+                    self.parse_files([f])
 
             except KeyboardInterrupt as e:
                 Tools.clear_line()
@@ -341,6 +632,18 @@ class Bloodhound(CmdBase):
         self.parse_domains_files(sorted([
             f for f in files
             if f.type == 'domains'
+        ], key=lambda x: (x.order, x.file_name), reverse=False))
+
+        # GPO
+        self.parse_gpo_files(sorted([
+            f for f in files
+            if f.type == 'gpos'
+        ], key=lambda x: (x.order, x.file_name), reverse=False))
+
+        # OU
+        self.parse_ou_files(sorted([
+            f for f in files
+            if f.type == 'ous'
         ], key=lambda x: (x.order, x.file_name), reverse=False))
 
         # Groups
@@ -381,6 +684,14 @@ class Bloodhound(CmdBase):
                         if oid is None or properties is None:
                             raise Exception('Unable to parse domain data')
 
+                        self.db.insert_or_update_bloodhound_object(
+                            label='Computer',
+                            object_id=oid,
+                            filter_type='objectid',
+                            source=oid,
+                            **properties
+                        )
+
                         name = properties.get('name', None)
                         domain = properties.get('domain', None)
                         dn = properties.get('distinguishedname', None)
@@ -411,6 +722,140 @@ class Bloodhound(CmdBase):
                 bar.hide = True
                 Tools.clear_line()
 
+
+    def parse_ou_files(self, files: list[BloodhoundFile]):
+
+        Color.pl('{?} {W}{D}importing OU...{W}')
+
+        total = sum(f.items for f in files)
+        with progress.Bar(label=" Processing ", expected_size=total) as bar:
+            try:
+                count = 0
+                for file in files:
+                    data = file.get_json().get('data', [])
+                    for idx, ou in enumerate(data):
+                        count += 1
+                        bar.show(count)
+
+                        oid = ou.get('ObjectIdentifier', None)
+                        properties = ou.get('Properties', None)
+
+                        if oid is None or properties is None:
+                            raise Exception('Unable to parse OU data')
+
+                        self.db.insert_or_update_bloodhound_object(
+                            label='OU',
+                            object_id=oid,
+                            filter_type='objectid',
+                            source=oid,
+                            **properties
+                        )
+
+                        if 'Aces' in ou and ou['Aces'] is not None:
+                            self.process_ace_list(ou['Aces'], oid, "OU")
+
+                        options = [
+                            ('Users', 'User', 'Contains'),
+                            ('Computers', 'Computer', 'Contains'),
+                            ('ChildOus', 'OU', 'Contains'),
+                        ]
+
+                        for option, member_type, edge_name in options:
+                            if option in ou and ou[option]:
+                                targets = ou[option]
+                                for target in targets:
+                                    self.db.insert_or_update_bloodhound_edge(
+                                        source=oid,
+                                        target=target,
+                                        source_label='OU',
+                                        target_label=member_type,
+                                        edge_type=edge_name,
+                                        edge_props='{isacl: false}',
+                                        filter_type='objectid',
+                                        props=dict(source=oid, target=target)
+                                    )
+
+
+                        if 'Links' in ou and ou['Links']:
+                            for gpo in ou['Links']:
+                                self.db.insert_or_update_bloodhound_edge(
+                                    source=oid,
+                                    target=gpo['GUID'].upper(),
+                                    source_label='GPO',
+                                    target_label='OU',
+                                    edge_type='GpLink',
+                                    edge_props='{isacl: false, enforced: prop.enforced}',
+                                    filter_type='objectid',
+                                    props=dict(source=oid, target=gpo['GUID'].upper(), enforced=gpo['IsEnforced'])
+                                )
+
+
+                        options = [
+                            ('LocalAdmins', 'AdminTo'),
+                            ('PSRemoteUsers', 'CanPSRemote'),
+                            ('DcomUsers', 'ExecuteDCOM'),
+                            ('RemoteDesktopUsers', 'CanRDP'),
+                        ]
+
+                        for option, edge_name in options:
+                            if option in ou and ou[option]:
+                                targets = ou[option]
+                                for target in targets:
+                                    for computer in ou['Computers']:
+                                        self.db.insert_or_update_bloodhound_edge(
+                                            source=computer,
+                                            target=target['ObjectIdentifier'],
+                                            source_label=target['ObjectType'],
+                                            target_label='Computer',
+                                            edge_type='edge_name',
+                                            edge_props='{isacl: false, fromgpo: true}',
+                                            filter_type='objectid',
+                                            props=dict(target=computer, source=target['ObjectIdentifier'])
+                                        )
+
+            except KeyboardInterrupt as e:
+                raise e
+            finally:
+                bar.hide = True
+                Tools.clear_line()
+
+    def parse_gpo_files(self, files: list[BloodhoundFile]):
+
+        Color.pl('{?} {W}{D}importing GPO...{W}')
+
+        total = sum(f.items for f in files)
+        with progress.Bar(label=" Processing ", expected_size=total) as bar:
+            try:
+                count = 0
+                for file in files:
+                    data = file.get_json().get('data', [])
+                    for idx, gpo in enumerate(data):
+                        count += 1
+                        bar.show(count)
+
+                        oid = gpo.get('ObjectIdentifier', None)
+                        properties = gpo.get('Properties', None)
+
+                        if oid is None or properties is None:
+                            raise Exception('Unable to parse GPO data')
+
+                        self.db.insert_or_update_bloodhound_object(
+                            label='GPO',
+                            object_id=oid,
+                            filter_type='objectid',
+                            source=oid,
+                            **properties
+                        )
+
+                        if "Aces" in gpo and gpo["Aces"] is not None:
+                            self.process_ace_list(gpo['Aces'], oid, "GPO")
+
+            except KeyboardInterrupt as e:
+                raise e
+            finally:
+                bar.hide = True
+                Tools.clear_line()
+
     def parse_domains_files(self, files: list[BloodhoundFile]):
 
         Color.pl('{?} {W}{D}importing domains...{W}')
@@ -421,27 +866,137 @@ class Bloodhound(CmdBase):
                 count = 0
                 for file in files:
                     data = file.get_json().get('data', [])
-                    for idx, dd in enumerate(data):
+                    for idx, domain in enumerate(data):
                         count += 1
                         bar.show(count)
 
-                        oid = dd.get('ObjectIdentifier', None)
-                        properties = dd.get('Properties', None)
+                        oid = domain.get('ObjectIdentifier', None)
+                        properties = domain.get('Properties', None)
 
                         if oid is None or properties is None:
                             raise Exception('Unable to parse domain data')
 
                         name = properties.get('name', None)
-                        domain = properties.get('domain', None)
+                        domain_name = properties.get('domain', None)
                         dn = properties.get('distinguishedname', None)
 
-                        if name is None or domain is None or dn is None:
+                        if name is None or domain_name is None or dn is None:
                             raise Exception('Unable to parse domain data')
 
                         self.db.insert_or_get_domain(
-                            domain=domain,
+                            domain=domain_name,
                             dn=dn,
                             object_identifier=oid)
+
+                        #BloodHound objects
+
+                        self.db.insert_or_update_bloodhound_object(
+                            label='Domain',
+                            object_id=oid,
+                            filter_type='objectid',
+                            source=oid,
+                            **properties
+                        )
+
+                        if 'Aces' in domain and domain['Aces'] is not None:
+                            self.process_ace_list(domain['Aces'], oid, "Domain")
+
+                        trust_map = {0: 'ParentChild', 1: 'CrossLink', 2: 'Forest', 3: 'External', 4: 'Unknown'}
+                        if 'Trusts' in domain and domain['Trusts'] is not None:
+                            for trust in domain['Trusts']:
+                                trust_type = trust['TrustType']
+                                direction = trust['TrustDirection']
+                                props = {}
+                                if direction in [1, 3]:
+                                    props = dict(
+                                        source=oid,
+                                        target=trust['TargetDomainSid'],
+                                        trusttype=trust_map[trust_type],
+                                        transitive=trust['IsTransitive'],
+                                        sidfiltering=trust['SidFilteringEnabled'],
+                                    )
+                                elif direction in [2, 4]:
+                                    props = dict(
+                                        target=oid,
+                                        source=trust['TargetDomainSid'],
+                                        trusttype=trust_map[trust_type],
+                                        transitive=trust['IsTransitive'],
+                                        sidfiltering=trust['SidFilteringEnabled'],
+                                    )
+                                else:
+                                    Color.pl('{!} {W}{D}Could not determine direction of trust... direction: {O}%s{W}' % direction)
+                                    continue
+
+                                self.db.insert_or_update_bloodhound_edge(
+                                    source=props['source'],
+                                    target=props['target'],
+                                    source_label='Domain',
+                                    target_label='Domain',
+                                    edge_type='TrustedBy',
+                                    edge_props='{sidfiltering: prop.sidfiltering, trusttype: prop.trusttype, transitive: prop.transitive, isacl: false}',
+                                    filter_type='objectid',
+                                    props=props
+                                )
+
+                        options = [
+                            ('Users', 'User', 'Contains'),
+                            ('Computers', 'Computer', 'Contains'),
+                            ('ChildOus', 'OU', 'Contains'),
+                        ]
+
+                        for option, member_type, edge_name in options:
+                            if option in domain and domain[option]:
+                                targets = domain[option]
+                                for target in targets:
+                                    self.db.insert_or_update_bloodhound_edge(
+                                        source=oid,
+                                        target=target,
+                                        source_label='OU',
+                                        target_label=member_type,
+                                        edge_type=edge_name,
+                                        edge_props='{isacl: false}',
+                                        filter_type='objectid',
+                                        props=dict(source=oid, target=target)
+                                    )
+
+                        if 'Links' in domain and domain['Links']:
+                            for gpo in domain['Links']:
+                                self.db.insert_or_update_bloodhound_edge(
+                                    source=oid,
+                                    target=gpo['GUID'].upper(),
+                                    source_label='GPO',
+                                    target_label='OU',
+                                    edge_type='GpLink',
+                                    edge_props='{isacl: false, enforced: prop.enforced}',
+                                    filter_type='objectid',
+                                    props=dict(source=oid,
+                                           target=gpo['GUID'].upper(),
+                                           enforced=gpo['IsEnforced'])
+                                )
+
+                        options = [
+                            ('LocalAdmins', 'AdminTo'),
+                            ('PSRemoteUsers', 'CanPSRemote'),
+                            ('DcomUsers', 'ExecuteDCOM'),
+                            ('RemoteDesktopUsers', 'CanRDP'),
+                        ]
+
+                        for option, edge_name in options:
+                            if option in domain and domain[option]:
+                                targets = domain[option]
+                                for target in targets:
+                                    for computer in domain['Computers']:
+                                        self.db.insert_or_update_bloodhound_edge(
+                                            source=target['ObjectIdentifier'],
+                                            target=computer,
+                                            source_label=target['ObjectType'],
+                                            target_label='Computer',
+                                            edge_type=edge_name,
+                                            edge_props='{isacl: false, fromgpo: true}',
+                                            filter_type='objectid',
+                                            props=dict(source=target['ObjectIdentifier'], target=computer)
+                                        )
+
             except KeyboardInterrupt as e:
                 raise e
             finally:
@@ -451,23 +1006,51 @@ class Bloodhound(CmdBase):
     def parse_groups_file(self, files: list[BloodhoundFile]):
         groups = {}
 
-        Color.pl('{?} {W}{D}loading groups...{W}')
+        Color.pl('{?} {W}{D}importing groups...{W}')
 
         total = sum(f.items for f in files)
-        with progress.Bar(label=" Processing ", expected_size=total) as bar:
+        with progress.Bar(label=" Importing ", expected_size=total) as bar:
             try:
                 count = 0
                 for file in files:
                     data = file.get_json().get('data', [])
-                    for idx, dd in enumerate(data):
+                    for idx, group in enumerate(data):
                         count += 1
                         bar.show(count)
 
-                        gid = dd.get('ObjectIdentifier', None)
-                        properties = dd.get('Properties', None)
+                        gid = group.get('ObjectIdentifier', None)
+                        properties = group.get('Properties', None)
 
                         if gid is None or properties is None:
                             raise Exception('Unable to parse domain data')
+
+                        self.db.insert_or_update_bloodhound_object(
+                            label='Group',
+                            object_id=gid,
+                            filter_type='objectid',
+                            source=gid,
+                            **properties
+                        )
+
+                        if 'Aces' in group and group['Aces'] is not None:
+                            self.process_ace_list(group['Aces'], gid, "Group")
+
+                        for member in group['Members']:
+                            self.db.insert_or_update_bloodhound_edge(
+                                source=member['ObjectIdentifier'],
+                                target=gid,
+                                source_label=member['ObjectType'],
+                                target_label='Group',
+                                edge_type='MemberOf',
+                                edge_props='{isacl: false}',
+                                filter_type='objectid',
+                                props=dict(source=member['ObjectIdentifier'], target=gid)
+                            )
+
+                            t = group.get('ObjectType', None)
+                            oid = group['ObjectIdentifier']
+                            if t == "Group":
+                                groups[gid]['members'].append(oid)
 
                         name = properties.get('name', '@').split('@')[0]
                         dn = properties.get('distinguishedname', None)
@@ -479,18 +1062,20 @@ class Bloodhound(CmdBase):
                             "domain_id": domain_id,
                             "object_identifier": gid,
                             "dn": dn,
-                            "json_members": dd.get('Members', []),
+                            "json_members": group.get('Members', []),
                             "members": [],
                             "membership": []
                         }
 
-                        # Step 1
-                        members = dd.get('Members', [])
-                        for g in members:
-                            t = g.get('ObjectType', None)
-                            oid = g['ObjectIdentifier']
-                            if t == "Group":
-                                groups[gid]['members'].append(oid)
+                        self.db.insert_group(
+                            domain=groups[gid]['domain_id'],
+                            object_identifier=groups[gid].get('object_identifier', '') if groups[gid].get(
+                                'object_identifier', None) is not None else '',
+                            name=groups[gid]['name'],
+                            dn=groups[gid].get('dn', '') if groups[gid].get('dn', None) is not None else '',
+                            members=json.dumps(groups[gid]['json_members']),
+                            membership=','.join(groups[gid]['membership'])
+                        )
 
             except KeyboardInterrupt as e:
                 raise e
@@ -508,28 +1093,6 @@ class Bloodhound(CmdBase):
                         bar.show(idx)
 
                         groups[g]['membership'] = [g1 for g1 in self.get_group_chain(groups, g, [])]
-
-                except KeyboardInterrupt as e:
-                    raise e
-                finally:
-                    bar.hide = True
-                    Tools.clear_line()
-
-            Color.pl('{?} {W}{D}inserting groups...{W}' + ' ' * 50)
-            with progress.Bar(label=" Inserting ", expected_size=cnt) as bar:
-                try:
-                    for idx, g in enumerate(groups):
-                        bar.show(idx)
-
-                        self.db.insert_group(
-                            domain=groups[g]['domain_id'],
-                            object_identifier=groups[g].get('object_identifier', '') if groups[g].get(
-                                'object_identifier', None) is not None else '',
-                            name=groups[g]['name'],
-                            dn=groups[g].get('dn', '') if groups[g].get('dn', None) is not None else '',
-                            members=json.dumps(groups[g]['json_members']),
-                            membership=','.join(groups[g]['membership'])
-                        )
 
                 except KeyboardInterrupt as e:
                     raise e
@@ -578,25 +1141,24 @@ class Bloodhound(CmdBase):
                 count = 0
                 for file in files:
                     data = file.get_json().get('data', [])
-                    for idx, dd in enumerate(data):
+                    for idx, user in enumerate(data):
                         count += 1
                         bar.show(count)
 
-                        oid = dd.get('ObjectIdentifier', None)
-                        properties = dd.get('Properties', None)
+                        oid = user.get('ObjectIdentifier', None)
+                        properties = user.get('Properties', None)
 
                         if oid is None or properties is None:
-                            raise Exception('Unable to parse user data 1: %s' % json.dumps(dd))
+                            raise Exception('Unable to parse user data 1: %s' % json.dumps(user))
 
                         name = properties.get('name', '@').split('@')[0].lower()
                         dn = properties.get('distinguishedname', None)
 
                         if name is None:
-                            raise Exception('Unable to parse user data 2: %s' % json.dumps(dd))
+                            raise Exception('Unable to parse user data 2: %s' % json.dumps(user))
 
                         domain_id = self.get_domain(properties)
 
-                        # Hard-coded empty password
                         self.db.insert_or_update_credential(
                             domain=domain_id,
                             username=name,
@@ -605,6 +1167,47 @@ class Bloodhound(CmdBase):
                             dn=dn,
                             ntlm_hash='',
                             type='U')
+
+                        self.db.insert_or_update_bloodhound_object(
+                            label='User',
+                            object_id=oid,
+                            filter_type='objectid',
+                            source=oid,
+                            **properties
+                        )
+
+                        if 'PrimaryGroupSid' in user and user['PrimaryGroupSid']:
+                            self.db.insert_or_update_bloodhound_edge(
+                                source=oid,
+                                target=user['PrimaryGroupSid'],
+                                source_label='User',
+                                target_label='Group',
+                                edge_type='MemberOf',
+                                edge_props='{isacl: false}',
+                                filter_type='objectid',
+                                props=dict(source=oid, target=user['PrimaryGroupSid'])
+                            )
+
+                        if 'AllowedToDelegate' in user and user['AllowedToDelegate']:
+                            for entry in user['AllowedToDelegate']:
+                                self.db.insert_or_update_bloodhound_edge(
+                                    source=oid,
+                                    target=entry,
+                                    source_label='User',
+                                    target_label='Computer',
+                                    edge_type='AllowedToDelegate',
+                                    edge_props='{isacl: false}',
+                                    filter_type='objectid',
+                                    props=dict(source=oid, target=entry)
+                                )
+
+                        # TODO add HasSIDHistory objects
+
+                        if 'Aces' in user and user['Aces'] is not None:
+                            self.process_ace_list(user['Aces'], oid, "User")
+
+                        if 'SPNTargets' in user and user['SPNTargets'] is not None:
+                            self.process_spntarget_list(user['SPNTargets'], oid)
 
             except KeyboardInterrupt as e:
                 raise e
@@ -680,3 +1283,48 @@ class Bloodhound(CmdBase):
         self.domain_cache[domain_sid] = domain_id
 
         return domain_id
+
+    def process_ace_list(self, ace_list: list, objectid: str, objecttype: str) -> None:
+        for entry in ace_list:
+            principal = entry['PrincipalSID']
+            principaltype = entry['PrincipalType']
+            right = entry['RightName']
+
+            if objectid == principal:
+                continue
+
+            props = dict(
+                source=principal,
+                target=objectid,
+                isinherited=entry['IsInherited'],
+            )
+
+            self.db.insert_or_update_bloodhound_edge(
+                source=principal,
+                target=objectid,
+                source_label=principaltype,
+                target_label=objecttype,
+                edge_type=right,
+                edge_props='{isacl: true, isinherited: prop.isinherited}',
+                filter_type='objectid',
+                props=props
+            )
+
+    def process_spntarget_list(self, spntarget_list: list, objectid: str) -> None:
+        for entry in spntarget_list:
+            props = dict(
+                source=objectid,
+                target=entry['ComputerSID'],
+                port=entry['Port'],
+            )
+
+            self.db.insert_or_update_bloodhound_edge(
+                source=objectid,
+                target=entry['ComputerSID'],
+                source_label='User',
+                target_label='Computer',
+                edge_type='',
+                edge_props='{isacl: false, port: prop.port}',
+                filter_type='objectid',
+                props=props
+            )

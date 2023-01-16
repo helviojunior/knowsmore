@@ -81,6 +81,15 @@ class Database(object):
         conn.commit()
 
     @connect
+    def insert_update_one(self, conn, table_name, **kwargs):
+        table_name = self.scrub(table_name)
+        (columns, values) = self.parse_args(kwargs)
+        sql = "INSERT OR REPLACE INTO {} ({}) VALUES ({})" \
+            .format(table_name, ','.join(columns), ', '.join(['?'] * len(columns)))
+        conn.execute(sql, values)
+        conn.commit()
+
+    @connect
     def select(self, conn, table_name, **kwargs):
 
         operator = self.scrub(kwargs.get('__operator', 'and'))
@@ -278,7 +287,7 @@ class Database(object):
                 groups TEXT NOT NULL DEFAULT(''),
                 password_id INTEGER NOT NULL,
                 user_data_similarity INTEGER NOT NULL DEFAULT(0),
-                insert_date datetime not null DEFAULT (datetime('now','localtime')),
+                insert_date datetime not null DEFAULT (datetime('now','utc')),
                 FOREIGN KEY(domain_id) REFERENCES domains(domain_id),
                 FOREIGN KEY(password_id) REFERENCES passwords(password_id),
                 UNIQUE(domain_id, name)
@@ -310,6 +319,39 @@ class Database(object):
                         sha512_hash TEXT NOT NULL DEFAULT(''),
                         password TEXT NOT NULL,
                         UNIQUE(ntlm_hash)
+                    );
+                """)
+
+        cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS [bloodhound_objects] (
+                        object_id TEXT NOT NULL,
+                        object_label TEXT NOT NULL,
+                        filter_type TEXT NOT NULL DEFAULT('objectid'),
+                        props TEXT NOT NULL DEFAULT(''),
+                        insert_date datetime not null DEFAULT (datetime('now','utc')),
+                        updated_date datetime not null DEFAULT (datetime('now','utc')),
+                        sync_date datetime not null DEFAULT ('1970-01-01'),
+                        UNIQUE(object_id, object_label)
+                    );
+                """)
+
+        conn.commit()
+
+        cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS [bloodhound_edge] (
+                        edge_id TEXT NOT NULL,
+                        source_id TEXT NOT NULL,
+                        destination_id TEXT NOT NULL,
+                        source_label TEXT NOT NULL,
+                        target_label TEXT NOT NULL,
+                        edge_type TEXT NOT NULL DEFAULT(''),
+                        edge_props TEXT NOT NULL DEFAULT(''),
+                        source_filter_type TEXT NOT NULL DEFAULT('objectid'),
+                        props TEXT NOT NULL DEFAULT(''),
+                        insert_date datetime not null DEFAULT (datetime('now','utc')),
+                        updated_date datetime not null DEFAULT (datetime('now','localtime')),
+                        sync_date datetime not null DEFAULT ('1970-01-01'),
+                        UNIQUE(edge_id)
                     );
                 """)
 
