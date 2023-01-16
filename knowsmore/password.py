@@ -54,8 +54,8 @@ class Password(object):
                     pass
 
                 if self.length <= 50:
-                    Color.pl('{?} {W}{D}the password ({W}{C}%s{W}{D}) contains Latin character, '
-                             'keeping HEX encoded ({W}{C}%s{W}{D}).{W}' % (self.latin_clear_text, self.clear_text))
+                    Color.pl('{?} {W}{D}parsed password ({W}{C}%s{W}{D}) contains Latin character, '
+                             'using HEX encoded ({W}{C}%s{W}{D}).{W}' % (self.latin_clear_text, self.clear_text))
 
     def analyze(self):
 
@@ -159,11 +159,20 @@ class Password(object):
                     p = "%s%s%s" % (word[0:index], s, word[index + 1:])
                     yield from self.get_leets(p, index + 1)
 
-    def calc_ratio(self, name: str, score_cutoff: float = 0.2) -> int:
+    def calc_ratio(self, name: str, score_cutoff: float = 0.0) -> int:
         if name == 0:
             name = name.lower()
 
         str_pass = self.bytes_password.decode("Latin-1")
+
+        if score_cutoff == 0.0 and len(str_pass) > 0:
+            score_cutoff = len(name) / float(len(str_pass)) - 0.05
+
+        if score_cutoff < 0.05:
+            score_cutoff = 0.05
+
+        if score_cutoff > 0.4:
+            score_cutoff = 0.4
 
         # Use a static cache to increase speed
         if name not in Password.leets_cache.keys():
