@@ -124,8 +124,10 @@ knowsmore --bloodhound --import-data ~/Desktop/20220912105336_users.json
 
 ```bash
 # Bloodhound ZIP File
-knowsmore --bloodhound --sync 10..10.10.10:7687 -d neo4j -u neo4j -p 12345678
+knowsmore --bloodhound --sync 10.10.10.10:7687 -d neo4j -u neo4j -p 12345678
 ```
+
+**Note:** The KnowsMore implementation od bloodhount-importer was inpired from [Fox-It BloodHound Import](https://github.com/fox-it/bloodhound-import) implementation. We implemented several changes to save all data in KnowsMore SQLite database and after that do an incremental sync to Neo4J database. With this strategy we have several benefits such as at least 10x faster tham original BloodHound User interface.
 
 ## Importing NTDS file
 
