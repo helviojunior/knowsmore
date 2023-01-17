@@ -125,19 +125,11 @@ class KnowsMoreDB(Database):
                                )
 
     def insert_or_update_bloodhound_object(self, label:str, object_id: str, filter_type: str = 'objectid',  **props):
-        self.insert_ignore_one(
+        self.insert_update_one(
             'bloodhound_objects',
             object_id=object_id,
             filter_type=filter_type,
             object_label=label,
-            props=json.dumps(props)
-        )
-        self.update(
-            'bloodhound_objects',
-            filter_data={'object_id': object_id},
-            filter_type=filter_type,
-            object_label=label,
-            updated_date=datetime.datetime.now(),
             props=json.dumps(props)
         )
 
