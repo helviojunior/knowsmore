@@ -23,10 +23,10 @@ class Wipe(CmdBase):
         super().__init__('wipe', 'Wipe critical data. (Clear text password and hashes)')
 
     def add_flags(self, flags: _ArgumentGroup):
-        flags.add_argument('--pre-computed',
+        flags.add_argument('--pre-computed-only',
                            action='store_true',
                            default=False,
-                           dest=f'pre_computed',
+                           dest=f'pre_computed_only',
                            help=Color.s(
                                'Wipe just pre computed passwords(default: {G}false{W}).{W}'))
 
@@ -35,7 +35,7 @@ class Wipe(CmdBase):
 
     def load_from_arguments(self, args: Namespace) -> bool:
         self.db = self.open_db(args)
-        self.pre_computed = args.pre_computed
+        self.pre_computed = args.pre_computed_only
 
         return True
 
