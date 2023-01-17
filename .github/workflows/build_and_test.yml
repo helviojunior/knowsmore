@@ -106,10 +106,10 @@ jobs:
 
       - name: Change Package version
         run: |
-          oldv=$( grep '__version__' knowsmore/meta.py | grep -oE '[0-9\.]+')
+          oldv=$( grep '__version__' knowsmore/__meta__.py | grep -oE '[0-9\.]+')
           current=$(date '+%Y%m%d%H%M%S')
-          meta=$(cat knowsmore/meta.py | sed "s/__version__.*/__version__ = '"${oldv}"-"${current}"'/")
-          echo "$meta" > knowsmore/meta.py
+          meta=$(cat knowsmore/__meta__.py | sed "s/__version__.*/__version__ = '"${oldv}"-"${current}"'/")
+          echo "$meta" > knowsmore/__meta__.py
 
       - name: Build artifact
         run: |
