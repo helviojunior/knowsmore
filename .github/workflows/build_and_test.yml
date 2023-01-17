@@ -108,7 +108,7 @@ jobs:
         run: |
           oldv=$( grep '__version__' knowsmore/meta.py | grep -oE '[0-9\.]+')
           current=$(date '+%Y%m%d%H%M%S')
-          meta=$(cat knowsmore/meta.py | sed "s/__version__.*/__version__ = "${oldv}"-"${current}"/")
+          meta=$(cat knowsmore/meta.py | sed "s/__version__.*/__version__ = '"${oldv}"-"${current}"'/")
           echo "$meta" > knowsmore/meta.py
 
       - name: Build artifact
