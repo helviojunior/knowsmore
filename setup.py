@@ -2,7 +2,7 @@
 # -*- coding: UTF-8 -*-
 
 '''
-The build version is auto update by local git hook at .git/hooks/pre-push wuth the following content
+The build version is auto update by local git hook at .git/hooks/pre-push with the following content
 
 #!/bin/bash
 
