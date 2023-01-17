@@ -42,6 +42,7 @@ class WordList(CmdBase):
     char_space = LEETS1
     filename = None
     batch = False
+    check_database = False
 
     def __init__(self):
         super().__init__('word-list', 'Generates a wordlist based on one word (generally, company name)')
@@ -109,7 +110,9 @@ class WordList(CmdBase):
                 Tools.exit_gracefully(1)
 
         self.filename = args.out_file
-        self.db = self.open_db(args)
+
+        # Database not yet needed
+        #self.db = self.open_db(args)
 
         return True
 
