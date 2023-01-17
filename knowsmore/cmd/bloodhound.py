@@ -17,7 +17,6 @@ from argparse import _ArgumentGroup, Namespace
 from clint.textui import progress
 from neo4j import GraphDatabase, exceptions, Session, Transaction
 from neo4j.exceptions import ClientError
-from tabulate import _table_formats, tabulate
 
 from knowsmore.cmdbase import CmdBase
 from knowsmore.libs.bloodhoundsync import BloodhoundSync
@@ -577,9 +576,8 @@ class Bloodhound(CmdBase):
                                 Tools.clear_line()
 
         elif self.mode == Bloodhound.ImportMode.Import:
+            start_date = datetime.datetime.now()
             try:
-                start_date = datetime.datetime.utcnow()
-
                 # Check file type
                 mime = mimetypes.MimeTypes().guess_type(self.filename)[0]
                 if mime == "application/zip":
@@ -617,20 +615,6 @@ class Bloodhound(CmdBase):
 
                             self.parse_files(files)
 
-                            Color.pl('{?} {W}Imported objects{W}')
-                            imported = self.db.select_raw(
-                                sql='select row_number() OVER (ORDER BY o.object_label ASC) AS line, o.object_label as type, count(o.object_id) as qty '
-                                    'from bloodhound_objects as o '
-                                    'where updated_date >= ?'
-                                    'group by o.object_label '
-                                    'order by o.object_label',
-                                args=[start_date])
-
-                            headers = imported[0].keys()
-                            data = [item.values() for item in imported]
-
-                            Color.pl('{W}{D}%s{W}' % tabulate(data, headers, tablefmt='psql'))
-
                         finally:
                             shutil.rmtree(tmpdirname)
                 else:
@@ -644,8 +628,22 @@ class Bloodhound(CmdBase):
             except KeyboardInterrupt as e:
                 Tools.clear_line()
                 print((" " * 180), end='\r', flush=True)
+                print('')
                 Logger.pl("{!} {C}Interrupted by user{W}")
                 raise e
+            finally:
+                Color.pl('{+} {W}Imported objects{W}')
+                imported = self.db.select_raw(
+                    sql='select row_number() OVER (ORDER BY o.object_label ASC) AS __line, o.object_label as Type, '
+                        'sum(CASE WHEN o.insert_date >= ? THEN 1 ELSE 0 END) as Inserted, '
+                        'sum(CASE WHEN o.insert_date < ? THEN 1 ELSE 0 END) as Updated '
+                        'from bloodhound_objects as o '
+                        'where o.updated_date >= ? '
+                        'group by o.object_label '
+                        'order by o.object_label',
+                    args=[start_date, start_date, start_date])
+
+                Color.pl('{W}{D}%s{W}' % Tools.get_tabulated(imported))
 
     def parse_files(self, files: list[BloodhoundFile]):
 
