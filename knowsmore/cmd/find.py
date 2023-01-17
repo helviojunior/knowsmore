@@ -93,12 +93,8 @@ class Find(CmdBase):
 
     def run(self):
 
-
-
         txt = f'%{self.find_text}%'
         hex = f'%{hexlify(self.find_text.encode("latin-1")).decode("UTF-8").lower()}%'
-        args = []
-
         sql = (
             'select c.credential_id, c.name, c.type, c.object_identifier, c.dn, d.domain_id, d.name as domain_name, d.object_identifier as domain_object_identifier, '
             'd.dn as domain_dn, p.password, p.ntlm_hash, p.md5_hash, p.sha1_hash, p.sha256_hash, p.sha512_hash '
@@ -109,25 +105,26 @@ class Find(CmdBase):
             'on c.domain_id = d.domain_id '
 
         )
+        pwd = Password(ntlm_hash='', clear_text=self.find_text)
 
         if self.find_type.value == Find.FindMode.Password.value:
             sql += (
                 ' where ('
                 '   p.password like ? or p.password like ? '
-                '   or p.ntlm_hash like ?'
+                '   or p.ntlm_hash like ? or p.ntlm_hash like ?'
                 ')'
             )
-            args = [hex, txt, txt]
+            args = [hex, txt, txt, pwd.ntlm_hash]
 
         else: #all
             sql += (
                 ' where ('
-                '   p.password like ? or p.password like ? or p.ntlm_hash like ? '
+                '   p.password like ? or p.password like ? or p.ntlm_hash like ? or p.ntlm_hash like ? '
                 '   or c.name like ? or c.object_identifier like ? or c.dn like ? '
                 '   or c.groups like ?'
                 ')'
             )
-            args = [hex, txt, txt, txt, txt, txt, txt]
+            args = [hex, txt, pwd.ntlm_hash, txt, txt, txt, txt, txt]
 
         if self.cracked_only:
             sql += ' and (p.length > 0) '
@@ -144,11 +141,22 @@ class Find(CmdBase):
             Logger.pl('{!} {O}Nothing found with this text{W}\r\n')
             exit(0)
 
+        news = {}
         for r in rows:
             p = r.get('password', '')
             if '$HEX[' in p:
                 p1 = Password('', p)
                 r['password'] = p1.latin_clear_text
+
+            # verify it is a new password (not yet registered)
+            if r['ntlm_hash'] == pwd.ntlm_hash and r['password'] == '':
+                news[pwd.ntlm_hash] = pwd.clear_text
+
+                # adjust output table
+                r['password'] = self.find_text
+
+                # register the nre password
+                self.db.insert_password_manually(pwd)
 
         if self.out_file is None:
             print(Tools.get_tabulated(rows))
@@ -165,6 +173,9 @@ class Find(CmdBase):
                         }
                     }
                 ))
+
+        for k, v in news.items():
+            Logger.pl('{+} {O}New password cracked! MTLM: {G}%s{O} Password: {G}%s{W}' % (k, v))
 
         Logger.pl('{+} {O}%s{W}{C} register found{W}' % len(rows))
 
