@@ -5,6 +5,7 @@ import shutil
 import sys, os.path
 import sqlite3
 import string, base64
+from functools import reduce
 from sqlite3 import Connection, OperationalError, IntegrityError, ProgrammingError
 
 
@@ -49,6 +50,7 @@ class Database(object):
 
     # Static value
     db_connection = None
+    constraints = []
 
     def __init__(self, auto_create=True, db_name=None):
 
@@ -81,12 +83,36 @@ class Database(object):
         conn.commit()
 
     @connect
-    def insert_update_one(self, conn, table_name, **kwargs):
+    def insert_replace_one(self, conn, table_name, **kwargs):
         table_name = self.scrub(table_name)
         (columns, values) = self.parse_args(kwargs)
         sql = "INSERT OR REPLACE INTO {} ({}) VALUES ({})" \
             .format(table_name, ','.join(columns), ', '.join(['?'] * len(columns)))
         conn.execute(sql, values)
+        conn.commit()
+
+    @connect
+    def insert_update_one(self, conn, table_name, **kwargs):
+        table_name = self.scrub(table_name)
+        (columns, values) = self.parse_args(kwargs)
+        sql = "INSERT OR IGNORE INTO {} ({}) VALUES ({})" \
+            .format(table_name, ','.join(columns), ', '.join(['?'] * len(columns)))
+        c = conn.execute(sql, values)
+
+        # was inserted, no need to update
+        if c.rowcount == 0:
+            table_name = self.scrub(table_name)
+            f_columns = self.constraints[table_name]
+            f_values = tuple([kwargs.get(c, None) for c in f_columns],)
+            (u_columns, u_values) = self.parse_args(kwargs)
+
+            sql = f"UPDATE {table_name} SET "
+            sql += "{}".format(', '.join([f'{col} = ?' for col in u_columns]))
+            if len(f_columns) > 0:
+                sql += " WHERE {}".format(f' and '.join([f'{col} = ?' for col in f_columns]))
+            conn.execute(sql, tuple(u_values + f_values, ))
+            conn.commit()
+
         conn.commit()
 
     @connect
@@ -164,6 +190,35 @@ class Database(object):
         conn.execute(sql, tuple(u_values + f_values, ))
         conn.commit()
 
+    def get_contraints(self) -> dict:
+        sql = ('SELECT '
+               '  m.tbl_name AS table_name, '
+               '  il.name AS key_name, '
+               '  ii.name AS column_name '
+               'FROM  '
+               '  sqlite_master AS m,  '
+               '  pragma_index_list(m.name) AS il,  '
+               '  pragma_index_info(il.name) AS ii  '
+               'WHERE  '
+               '  m.type = "table" AND  '
+               '  il.origin = "u"  '
+               'ORDER BY table_name, key_name, ii.seqno')
+
+        cursor = Database.db_connection.execute(sql)
+        columns = cursor.description
+        db_scheme = [{columns[index][0]: column for index, column in enumerate(value)} for value in cursor.fetchall()]
+
+        if len(db_scheme) > 0:
+            self.constraints = reduce(lambda a, b: {**a, **b},
+                                      [{table: [
+                                            v['column_name'] for idx, v in enumerate(db_scheme)
+                                            if v['table_name'] == table
+                                        ]} for table in set([t['table_name'] for t in db_scheme])])
+        else:
+            self.constraints = {}
+
+        return self.constraints
+
     def parse_args(self, source_dict) -> tuple:
         if source_dict is None:
             return [], tuple([])
@@ -227,6 +282,9 @@ class Database(object):
         # cursor.execute("PRAGMA foreign_keys=ON")
 
         Database.db_connection = conn
+
+        # get database constraints
+        self.get_contraints()
 
         return Database.db_connection
 
@@ -301,7 +359,7 @@ class Database(object):
                 groups TEXT NOT NULL DEFAULT(''),
                 password_id INTEGER NOT NULL,
                 user_data_similarity INTEGER NOT NULL DEFAULT(0),
-                insert_date datetime not null DEFAULT (datetime('now','utc')),
+                insert_date datetime not null DEFAULT (datetime('now','localtime')),
                 FOREIGN KEY(domain_id) REFERENCES domains(domain_id),
                 FOREIGN KEY(password_id) REFERENCES passwords(password_id),
                 UNIQUE(domain_id, name)
@@ -342,12 +400,22 @@ class Database(object):
                         object_label TEXT NOT NULL,
                         filter_type TEXT NOT NULL DEFAULT('objectid'),
                         props TEXT NOT NULL DEFAULT(''),
-                        insert_date datetime not null DEFAULT (datetime('now','utc')),
-                        updated_date datetime not null DEFAULT (datetime('now','utc')),
+                        insert_date datetime not null DEFAULT(strftime('%Y-%m-%d %H:%M:%f', 'NOW', 'localtime')),
+                        updated_date datetime not null DEFAULT(strftime('%Y-%m-%d %H:%M:%f', 'NOW', 'localtime')),
                         sync_date datetime not null DEFAULT ('1970-01-01'),
                         UNIQUE(object_id, object_label)
                     );
                 """)
+
+        conn.commit()
+
+        #cursor.execute("""
+        #            CREATE TRIGGER bloodhound_objects_insert_Trigger
+        #            AFTER INSERT ON bloodhound_objects
+        #            BEGIN
+        #               UPDATE bloodhound_objects SET insert_date = NEW.updated_date WHERE object_id = NEW.object_id;
+        #            END;
+        #        """)
 
         conn.commit()
 
@@ -362,8 +430,8 @@ class Database(object):
                         edge_props TEXT NOT NULL DEFAULT(''),
                         source_filter_type TEXT NOT NULL DEFAULT('objectid'),
                         props TEXT NOT NULL DEFAULT(''),
-                        insert_date datetime not null DEFAULT (datetime('now','utc')),
-                        updated_date datetime not null DEFAULT (datetime('now','localtime')),
+                        insert_date datetime not null DEFAULT(strftime('%Y-%m-%d %H:%M:%f', 'NOW', 'localtime')),
+                        updated_date datetime not null DEFAULT(strftime('%Y-%m-%d %H:%M:%f', 'NOW', 'localtime')),
                         sync_date datetime not null DEFAULT ('1970-01-01'),
                         UNIQUE(edge_id)
                     );
