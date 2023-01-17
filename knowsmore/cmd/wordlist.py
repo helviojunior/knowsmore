@@ -130,10 +130,10 @@ class WordList(CmdBase):
         estimated_size = self.calculate()
         Logger.pl(
             '{+} {W}KnowsMore will generate +- the following amount of data: {O}%s{W}.' % Tools.sizeof_fmt(
-                estimated_size)
+                estimated_size, start_unit="K")
         )
         stat = shutil.disk_usage(Path(self.filename).parent)
-        if stat.free < estimated_size + (estimated_size * 0.2):
+        if stat.free/1024 < estimated_size + (estimated_size * 0.2):
             Logger.pl('{!} {R}error: not enough disk space.{W}\r\n')
             Tools.exit_gracefully(1)
 
@@ -147,12 +147,13 @@ class WordList(CmdBase):
                 exit(0)
             print(' ')
 
-        Color.pl('{?} {W}{D}Generating the wordlist wit +- {G}%s{W}{D}, please wait...{W}' % Tools.sizeof_fmt(estimated_size))
+        Color.pl('{?} {W}{D}Generating the wordlist wit +- {G}%s{W}{D}, please wait...{W}' % Tools.sizeof_fmt(estimated_size, start_unit="K"))
         count = 0
         lines = 0
+        last = 0
         try:
             with open(self.filename, 'w' if not self.append_file else 'a', encoding="UTF-8") as f:
-                with progress.Bar(label=" Generating ", expected_size=estimated_size + 1, every=1024) as bar:
+                with progress.Bar(label=" Generating ", expected_size=(estimated_size * 1024.0) + 1, every=1024) as bar:
                     try:
                         for w in self.generate(self.name, 0):
                             txt = f'{w}\n'
@@ -162,10 +163,11 @@ class WordList(CmdBase):
                             f.write(f'{w}\n')
 
                             if count & (1024 * 100) == 0:
-
-                                if count > bar.expected_size:
-                                    bar.expected_size = count
-                                bar.show(count)
+                                if count > last:
+                                    if count > bar.expected_size:
+                                        bar.expected_size = count
+                                    bar.show(count)
+                                    last = count
 
                     except KeyboardInterrupt as e:
                         raise e
@@ -203,7 +205,12 @@ class WordList(CmdBase):
                 ) * 2
         common_space = np.sum([len(line) + 1 for line in self.add_common(self.name)])
 
-        r = int((s + 1) + (leet_lines * (s + 1)) + (leet_lines * common_space) + padding_space)
+        r = int(
+            float(s + 1)/1024.0 +
+            float(leet_lines * (s + 1))/1024.0 +
+            float(leet_lines * common_space)/1024.0 +
+            float(padding_space)/1024.0
+        )
         if r < 0:
             r = 0
         return r
