@@ -95,7 +95,7 @@ class Find(CmdBase):
 
 
         txt = f'%{self.find_text}%'
-        hex = f'%{hexlify(self.find_text.encode("latin-1")).lower()}%'
+        hex = f'%{hexlify(self.find_text.encode("latin-1")).decode("UTF-8").lower()}%'
         args = []
 
         sql = (
