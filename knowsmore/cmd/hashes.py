@@ -196,8 +196,10 @@ class NTLMHash(CmdBase):
 
             pdata = {}
 
-            if Configuration.company != '':
-                pdata['company_similarity'] = self.password.calc_ratio(Configuration.company)
+            if len(Configuration.company) > 0:
+                pdata['company_similarity'] = sorted(
+                            [self.password.calc_ratio(n1) for n1 in Configuration.company]
+                        )[-1]
 
             self.db.insert_password_manually(self.password, **pdata)
             Logger.pl('{+} {C}Password inserted/updated{W}')
@@ -328,8 +330,10 @@ class NTLMHash(CmdBase):
                                     clear_text=pre_computed[0]['password']
                                 )
 
-                                if Configuration.company != '':
-                                    pdata['company_similarity'] = password.calc_ratio(Configuration.company)
+                                if len(Configuration.company) > 0:
+                                    pdata['company_similarity'] = sorted(
+                                        [password.calc_ratio(n1) for n1 in Configuration.company]
+                                    )[-1]
 
                                 self.db.update_password(
                                     password,
@@ -354,7 +358,7 @@ class NTLMHash(CmdBase):
             count = 0
             ignored = 0
 
-            if Configuration.company == '':
+            if len(Configuration.company) == 0:
                 Logger.pl(
                     '{!} {W}It is recommended import cracked passwords using the parameter {O}--company{W} because '
                     'the KnowsMore will calculate the score of similarity of the passwords and Company Name.'
@@ -413,8 +417,10 @@ class NTLMHash(CmdBase):
 
                                 pdata = {}
 
-                                if Configuration.company != '':
-                                    pdata['company_similarity'] = password.calc_ratio(Configuration.company)
+                                if len(Configuration.company) > 0:
+                                    pdata['company_similarity'] = sorted(
+                                        [password.calc_ratio(n1) for n1 in Configuration.company]
+                                    )[-1]
 
                                 self.db.update_password(
                                     password,

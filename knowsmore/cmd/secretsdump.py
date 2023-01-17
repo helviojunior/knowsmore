@@ -529,8 +529,10 @@ class SecretsDump(CmdBase):
             self.add_credential(secret.domain, secret.user_name, pwd.ntlm_hash)
 
             pdata = {}
-            if Configuration.company != '':
-                pdata['company_similarity'] = pwd.calc_ratio(Configuration.company)
+            if len(Configuration.company) > 0:
+                pdata['company_similarity'] = sorted(
+                    [pwd.calc_ratio(n1) for n1 in Configuration.company]
+                )[-1]
 
             self.db.insert_password_manually(pwd, **pdata)
 

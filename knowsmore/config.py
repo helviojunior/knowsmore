@@ -22,7 +22,7 @@ class Configuration(object):
     verbose = 0
     module = None
     cmd_line = ''
-    company = ''
+    company = []
 
     @staticmethod
     def initialize():
@@ -78,10 +78,10 @@ class Configuration(object):
         Logger.pl('     {C}module:{O} %s{W}' % module.name)
 
         if args.args.company is not None and args.args.company.strip(' .,'):
-            Configuration.company = Tools.clear_string(args.args.company)
+            Configuration.company = [] + Tools.clear_string(args.args.company).split(',')
 
-        if Configuration.company != '':
-            Logger.pl('     {C}company name:{O} %s{W}' % Configuration.company)
+        if len(Configuration.company) > 0:
+            Logger.pl('     {C}company name:{O} %s{W}' % ', '.join(Configuration.company))
 
         if not module.load_from_arguments(args.args):
             Configuration.mandatory()

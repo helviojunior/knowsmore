@@ -38,6 +38,8 @@ class Tools:
             return True
         elif s == ".":
             return True
+        elif s == ",":
+            return True
         else:
             return False
 

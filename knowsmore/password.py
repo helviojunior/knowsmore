@@ -168,8 +168,10 @@ class Password(object):
                     yield from self.get_leets(p, index + 1)
 
     def calc_ratio(self, name: str, score_cutoff: float = 0.0) -> int:
-        if name == 0:
-            name = name.lower()
+        if len(name) == 0:
+            return 0
+
+        name = name.lower()
 
         str_pass = self.bytes_password.decode("Latin-1")
 
