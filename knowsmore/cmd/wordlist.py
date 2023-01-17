@@ -208,7 +208,7 @@ class WordList(CmdBase):
         r = int(
             float(s + 1)/1024.0 +
             float(leet_lines * (s + 1))/1024.0 +
-            float((float(leet_lines)/1024.0) * (float(common_space)/1024.0)) +
+            float((float(leet_lines)/1024.0) * (float(common_space)/1024.0))*1024.0 +
             float(padding_space)/1024.0
         )
         if r < 0:
