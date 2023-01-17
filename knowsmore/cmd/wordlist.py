@@ -202,7 +202,10 @@ class WordList(CmdBase):
                     + (math.pow(self.unique_ch_b - len(self.unique_chars), s1) * (self.unique_ch_b - len(self.unique_chars)) * (s1 + 1))
                 ) * 2
         common_space = np.sum([len(line) + 1 for line in self.add_common(self.name)])
-        return (s + 1) + (leet_lines * (s + 1)) + (leet_lines * common_space) + padding_space
+        r = int((s + 1) + (leet_lines * (s + 1)) + (leet_lines * common_space) + padding_space)
+        if r < 0:
+            r = 0
+        return r
 
     def generate(self, word, index) -> list:
         c = word[index:index + 1]
