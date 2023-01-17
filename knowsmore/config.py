@@ -81,6 +81,12 @@ class Configuration(object):
             Configuration.company = [] + Tools.clear_string(args.args.company).split(',')
 
         if len(Configuration.company) > 0:
+            for c in Configuration.company:
+                if len(c) >= 7:
+                    Color.pl('{!} {R}error: company reached maximum name length.{W}\r\n')
+                    exit(1)
+
+        if len(Configuration.company) > 0:
             Logger.pl('     {C}company name:{O} %s{W}' % ', '.join(Configuration.company))
 
         if not module.load_from_arguments(args.args):
