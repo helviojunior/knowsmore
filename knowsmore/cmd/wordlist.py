@@ -163,8 +163,8 @@ class WordList(CmdBase):
 
                             if count & (1024 * 100) == 0:
 
-                                if count > bar.estimated_size:
-                                    bar.estimated_size = count
+                                if count > bar.expected_size:
+                                    bar.expected_size = count
                                 bar.show(count)
 
                     except KeyboardInterrupt as e:
