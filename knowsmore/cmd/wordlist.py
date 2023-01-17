@@ -43,6 +43,7 @@ class WordList(CmdBase):
     filename = None
     batch = False
     check_database = False
+    append_file = False
 
     def __init__(self):
         super().__init__('word-list', 'Generates a wordlist based on one word (generally, company name)')
@@ -54,6 +55,13 @@ class WordList(CmdBase):
                            dest=f'batch',
                            help=Color.s(
                                'Never ask for user input, use the default behavior'))
+
+        flags.add_argument('--append',
+                           action='store_true',
+                           default=False,
+                           dest=f'append_file',
+                           help=Color.s(
+                               'Append to the output file'))
 
     def add_commands(self, cmds: _ArgumentGroup):
         cmds.add_argument('--name', action='store', dest='name', help='Name')
@@ -85,6 +93,7 @@ class WordList(CmdBase):
         self.padding = args.padding
         self.no_leets = args.no_leets
         self.batch = args.batch
+        self.append_file = args.append_file
 
         if self.min_size < 1:
             self.min_size = 1
@@ -96,7 +105,7 @@ class WordList(CmdBase):
         self.unique_ch_b = int(np.sum([len(v.encode("UTF-8")) for v in self.unique_chars]))
 
         try:
-            with open(args.out_file, 'w', encoding="UTF-8") as f:
+            with open(args.out_file, 'a', encoding="UTF-8") as f:
                 pass
         except IOError as x:
             if x.errno == errno.EACCES:
@@ -142,7 +151,7 @@ class WordList(CmdBase):
         count = 0
         lines = 0
         try:
-            with open(self.filename, 'w', encoding="UTF-8") as f:
+            with open(self.filename, 'w' if not self.append_file else 'a', encoding="UTF-8") as f:
                 with progress.Bar(label=" Generating ", expected_size=estimated_size, every=1024) as bar:
                     try:
                         for w in self.generate(self.name, 0):
