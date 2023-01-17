@@ -17,6 +17,7 @@ from argparse import _ArgumentGroup, Namespace
 from clint.textui import progress
 from neo4j import GraphDatabase, exceptions, Session, Transaction
 from neo4j.exceptions import ClientError
+from tabulate import _table_formats, tabulate
 
 from knowsmore.cmdbase import CmdBase
 from knowsmore.libs.bloodhoundsync import BloodhoundSync
@@ -577,6 +578,8 @@ class Bloodhound(CmdBase):
 
         elif self.mode == Bloodhound.ImportMode.Import:
             try:
+                start_date = datetime.datetime.utcnow()
+
                 # Check file type
                 mime = mimetypes.MimeTypes().guess_type(self.filename)[0]
                 if mime == "application/zip":
@@ -613,6 +616,20 @@ class Bloodhound(CmdBase):
                             Color.pl('{?} {W}{O}%s{G} valid files in ZIP{W}' % len(files))
 
                             self.parse_files(files)
+
+                            Color.pl('{?} {W}Imported objects{W}')
+                            imported = self.db.select_raw(
+                                sql='select row_number() OVER (ORDER BY o.object_label ASC) AS line, o.object_label as type, count(o.object_id) as qty '
+                                    'from bloodhound_objects as o '
+                                    'where updated_date >= ?'
+                                    'group by o.object_label '
+                                    'order by o.object_label',
+                                args=[start_date])
+
+                            headers = imported[0].keys()
+                            data = [item.values() for item in imported]
+
+                            Color.pl('{W}{D}%s{W}' % tabulate(data, headers, tablefmt='psql'))
 
                         finally:
                             shutil.rmtree(tmpdirname)
