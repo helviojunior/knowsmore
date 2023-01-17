@@ -163,7 +163,7 @@ class WordList(CmdBase):
 
                             if count & (1024 * 100) == 0:
 
-                                if count > estimated_size:
+                                if count > bar.estimated_size:
                                     bar.estimated_size = count
                                 bar.show(count)
 
@@ -202,6 +202,7 @@ class WordList(CmdBase):
                     + (math.pow(self.unique_ch_b - len(self.unique_chars), s1) * (self.unique_ch_b - len(self.unique_chars)) * (s1 + 1))
                 ) * 2
         common_space = np.sum([len(line) + 1 for line in self.add_common(self.name)])
+
         r = int((s + 1) + (leet_lines * (s + 1)) + (leet_lines * common_space) + padding_space)
         if r < 0:
             r = 0
