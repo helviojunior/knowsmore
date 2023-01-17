@@ -57,9 +57,9 @@ setup(
     zip_safe=False,
     classifiers=[
         "Development Status :: 5 - Production/Stable",
-        "Environment :: Active Directory Environment",
-        "Intended Audience :: Developers",
-        "License :: OSI Approved :: GPL-3",
+        "Environment :: Console",
+        "Intended Audience :: System Administrators",
+        "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         "Natural Language :: English",
         "Operating System :: OS Independent",
         "Programming Language :: Python",
@@ -71,8 +71,11 @@ setup(
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3 :: Only",
         "Programming Language :: Python :: Implementation :: PyPy",
-        "Topic :: Microsoft Active Directory :: Pentest",
-        "Topic :: Software Development :: Libraries",
+        "Topic :: Security",
+        "Topic :: System :: Networking",
+        "Topic :: System :: Operating System",
+        "Topic :: System :: Systems Administration",
+        "Topic :: Utilities"
     ],
     entry_points={'console_scripts': [
         'knowsmore=knowsmore.knowsmore:run',
