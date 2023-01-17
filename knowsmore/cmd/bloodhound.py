@@ -444,7 +444,7 @@ class Bloodhound(CmdBase):
                                 self.db.update(
                                     'bloodhound_objects',
                                     filter_data={'object_id': row},
-                                    sync_date=datetime.datetime.utcnow()
+                                    sync_date=datetime.datetime.now()
                                 )
                             self.synced = []
 
@@ -464,6 +464,9 @@ class Bloodhound(CmdBase):
 
                             for idx, row in enumerate(db_sync):
                                 t.add_item(row['object_id'], row)
+
+                            # clear control
+                            t.inserted = [row['object_id'] for idx, row in enumerate(db_sync)]
 
                         while t.executed < 1 and t.count > 0:
                             time.sleep(0.3)
@@ -486,7 +489,7 @@ class Bloodhound(CmdBase):
                                     self.db.update(
                                         'bloodhound_objects',
                                         filter_data={'object_id': row},
-                                        sync_date=datetime.datetime.utcnow()
+                                        sync_date=datetime.datetime.now()
                                     )
 
                             except KeyboardInterrupt as e:
@@ -524,11 +527,11 @@ class Bloodhound(CmdBase):
                                 self.db.update(
                                     'bloodhound_edge',
                                     filter_data={'edge_id': row},
-                                    sync_date=datetime.datetime.utcnow()
+                                    sync_date=datetime.datetime.now()
                                 )
                             self.synced = []
 
-                            while t.count > 1000:
+                            while t.count > 3000:
                                 time.sleep(0.3)
 
                             db_sync = self.db.select_raw(
@@ -544,6 +547,9 @@ class Bloodhound(CmdBase):
 
                             for idx, row in enumerate(db_sync):
                                 t.add_item(row['edge_id'], row)
+
+                            # clear control
+                            t.inserted = [row['edge_id'] for idx, row in enumerate(db_sync)]
 
                         while t.executed < 1 and t.count > 0:
                             time.sleep(0.3)
@@ -566,7 +572,7 @@ class Bloodhound(CmdBase):
                                     self.db.update(
                                         'bloodhound_edge',
                                         filter_data={'edge_id': row},
-                                        sync_date=datetime.datetime.utcnow()
+                                        sync_date=datetime.datetime.now()
                                     )
 
                             except KeyboardInterrupt as e:

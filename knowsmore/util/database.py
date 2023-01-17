@@ -417,7 +417,7 @@ class Database(object):
         #            END;
         #        """)
 
-        conn.commit()
+        #conn.commit()
 
         cursor.execute("""
                     CREATE TABLE IF NOT EXISTS [bloodhound_edge] (
@@ -435,6 +435,27 @@ class Database(object):
                         sync_date datetime not null DEFAULT ('1970-01-01'),
                         UNIQUE(edge_id)
                     );
+                """)
+
+        conn.commit()
+
+        cursor.execute("""
+                    CREATE UNIQUE INDEX idx_bloodhound_edge_edge_id 
+                    ON bloodhound_edge (edge_id);
+                """)
+
+        conn.commit()
+
+        cursor.execute("""
+                    CREATE INDEX idx_bloodhound_edge_updated_date
+                    ON bloodhound_edge (updated_date);
+                """)
+
+        conn.commit()
+
+        cursor.execute("""
+                    CREATE INDEX idx_bloodhound_edge_sync_updated_date
+                    ON bloodhound_edge (sync_date, sync_date);
                 """)
 
         conn.commit()
