@@ -4,9 +4,10 @@ import sqlite3
 import time
 from argparse import _ArgumentGroup, Namespace
 from pathlib import Path
-from tabulate import _table_formats, tabulate
 from binascii import hexlify
 from enum import Enum
+
+from knowsmore.util.tools import Tools
 
 from knowsmore.cmdbase import CmdBase
 from knowsmore.password import Password
@@ -200,9 +201,7 @@ class Stats(CmdBase):
 
             for d in data:
                 Color.pl('{?} {W}{D}%s{W}' % d['description'])
-                headers = d['rows'][0].keys()
-                data = [item.values() for item in d['rows']]
-                print(tabulate(data, headers, tablefmt='psql'))
+                print(Tools.get_tabulated(d['rows']))
                 print(' ')
 
         else:

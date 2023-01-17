@@ -4,9 +4,10 @@ import sqlite3
 import time
 from argparse import _ArgumentGroup, Namespace
 from pathlib import Path
-from tabulate import _table_formats, tabulate
 from binascii import hexlify
 from enum import Enum
+
+from knowsmore.util.tools import Tools
 
 from knowsmore.cmdbase import CmdBase
 from knowsmore.password import Password
@@ -150,10 +151,7 @@ class Find(CmdBase):
                 r['password'] = p1.latin_clear_text
 
         if self.out_file is None:
-            headers = rows[0].keys()
-            data = [item.values() for item in rows]
-
-            print(tabulate(data, headers, tablefmt='psql'))
+            print(Tools.get_tabulated(rows))
 
         else:
             with open(self.out_file, "a", encoding="UTF-8") as text_file:

@@ -3,6 +3,7 @@
 import os
 import string, random, sys, re
 import unicodedata
+from tabulate import _table_formats, tabulate
 
 from knowsmore.util.color import Color
 
@@ -78,3 +79,11 @@ class Tools:
             .encode('ascii', 'ignore').decode("utf-8")
 
         return str(text).strip()
+
+    @staticmethod
+    def get_tabulated(data: list) -> str:
+
+        headers = [(h if h[0:2] != '__' else ' ') for h in data[0].keys()]
+        data = [item.values() for item in data]
+
+        return tabulate(data, headers, tablefmt='psql')

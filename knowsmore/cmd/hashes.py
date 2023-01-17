@@ -6,7 +6,6 @@ import time
 from argparse import _ArgumentGroup, Namespace
 from enum import Enum
 from clint.textui import progress
-from tabulate import _table_formats, tabulate
 
 from knowsmore.cmdbase import CmdBase
 from knowsmore.config import Configuration
@@ -229,10 +228,7 @@ class NTLMHash(CmdBase):
                 Logger.pl('{!} {O}Password/hash inserted but none user found with this password{W}\r\n')
                 exit(0)
 
-            headers = rows[0].keys()
-            data = [item.values() for item in rows]
-
-            print(tabulate(data, headers, tablefmt='psql'))
+            print(Tools.get_tabulated(rows))
 
             Logger.pl('{+} {O}%s{W}{C} register found{W}' % len(rows))
 
