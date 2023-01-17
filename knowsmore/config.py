@@ -82,7 +82,7 @@ class Configuration(object):
 
         if len(Configuration.company) > 0:
             for c in Configuration.company:
-                if len(c) >= 7:
+                if len(c.strip()) >= 7:
                     Color.pl('{!} {R}error: company reached maximum name length.{W}\r\n')
                     exit(1)
 
