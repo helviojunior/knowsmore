@@ -115,6 +115,15 @@ class KnowsMoreDB(Database):
 
         self.update_password(password, **kwargs)
 
+        self.insert_update_one('pre_computed',
+                               ntlm_hash=password.ntlm_hash,
+                               md5_hash=password.md5_hash,
+                               sha1_hash=password.sha1_hash,
+                               sha256_hash=password.sha256_hash,
+                               sha512_hash=password.sha512_hash,
+                               password=password.clear_text,
+                               )
+
     def insert_or_update_bloodhound_object(self, label:str, object_id: str, filter_type: str = 'objectid',  **props):
         self.insert_update_one(
             'bloodhound_objects',

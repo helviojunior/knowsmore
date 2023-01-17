@@ -246,6 +246,7 @@ class NTLMHash(CmdBase):
 
             count = 0
             ignored = 0
+            pc_count = 0
 
             total = Tools.count_file_lines(self.filename)
 
@@ -314,6 +315,29 @@ class NTLMHash(CmdBase):
                                 type=type,
                             )
 
+                            # check if exists at pre computed hashes
+                            pre_computed = self.db.select('pre_computed',
+                                                          ntlm_hash=hash
+                                                          )
+                            if len(pre_computed) > 0:
+
+                                pc_count += 1
+
+                                pdata = {}
+
+                                password = Password(
+                                    ntlm_hash=hash,
+                                    clear_text=pre_computed[0]['password']
+                                )
+
+                                if Configuration.company != '':
+                                    pdata['company_similarity'] = password.calc_ratio(Configuration.company)
+
+                                self.db.update_password(
+                                    password,
+                                    **pdata
+                                )
+
                             try:
                                 line = f.readline()
                             except:
@@ -324,6 +348,8 @@ class NTLMHash(CmdBase):
                 finally:
                     bar.hide = True
                     Tools.clear_line()
+                    if pc_count > 0:
+                        Logger.pl('{+} {W}{D}Found %d hashes at pre computed table{W}' % pc_count)
                     Logger.pl('{+} {C}Loaded {O}%s{W} lines' % count)
 
         elif self.mode == NTLMHash.ImportMode.Cracked:
