@@ -1,5 +1,6 @@
 import hashlib
 import codecs
+import unicodedata
 
 from knowsmore.util.color import Color
 from knowsmore.util.tools import Tools
@@ -33,7 +34,11 @@ class Password(object):
         self.ntlm_hash = ntlm_hash
         self.clear_text = clear_text
         self.latin_clear_text = clear_text
-        self.bytes_password = clear_text.encode("UTF-8")
+        try:
+            self.bytes_password = clear_text.encode("latin-1")
+        except:
+            self.bytes_password = unicodedata.normalize('NFD', clear_text) \
+                .encode('latin-1', 'ignore')
 
         if Password.leets_cache is None:
             Password.leets_cache = {}
@@ -75,6 +80,9 @@ class Password(object):
                 try:
                     b = c.encode("Latin-1")
                     tst = b.decode("UTF-8") # will raise error if it is a latin data
+                except UnicodeEncodeError:
+                    self.special += 1
+                    continue
                 except UnicodeDecodeError:
                     self.latin += 1
                     continue
