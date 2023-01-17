@@ -26,7 +26,8 @@ requires = [
     'tabulate>=0.9.0',
     'Levenshtein>=0.20.9',
     'neo4j>=5.4.0',
-    'impacket>=0.10.0'
+    'impacket>=0.10.0',
+    'numpy>=1.24.1'
 ]
 
 meta = {}

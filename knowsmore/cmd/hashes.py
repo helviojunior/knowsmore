@@ -177,6 +177,8 @@ class NTLMHash(CmdBase):
                     for row in rows:
                         f.write(f'{row["ntlm_hash"]}\n')
                     pass
+            except KeyboardInterrupt as e:
+                raise e
             except IOError as x:
                 if x.errno == errno.EACCES:
                     Logger.pl('{!} {R}error: could not open NTLM hashes file {O}permission denied{R}{W}\r\n')
@@ -187,8 +189,8 @@ class NTLMHash(CmdBase):
                 else:
                     Logger.pl('{!} {R}error: could not open NTLM hashes file {W}\r\n')
                     Tools.exit_gracefully(1)
-
-            Logger.pl('{+} {O}%d{W}{C} exported to {G}%s{W}' % (len(rows), self.filename))
+            finally:
+                Logger.pl('{+} {O}%d{W}{C} exported to {G}%s{W}' % (len(rows), self.filename))
 
         elif self.mode == NTLMHash.ImportMode.Password:
 
