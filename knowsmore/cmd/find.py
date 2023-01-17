@@ -155,7 +155,7 @@ class Find(CmdBase):
                 # adjust output table
                 r['password'] = self.find_text
 
-                # register the nre password
+                # register the new password
                 self.db.insert_password_manually(pwd)
 
         if self.out_file is None:
