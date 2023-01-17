@@ -152,7 +152,7 @@ class WordList(CmdBase):
         lines = 0
         try:
             with open(self.filename, 'w' if not self.append_file else 'a', encoding="UTF-8") as f:
-                with progress.Bar(label=" Generating ", expected_size=estimated_size, every=1024) as bar:
+                with progress.Bar(label=" Generating ", expected_size=estimated_size + 1, every=1024) as bar:
                     try:
                         for w in self.generate(self.name, 0):
                             txt = f'{w}\n'
