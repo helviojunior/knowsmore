@@ -106,7 +106,7 @@ jobs:
 
       - name: Change Package version
         run: |
-          oldv=$(grep -oE '[0-9\.]+' knowsmore/meta.py)
+          oldv=$( grep '__version__' knowsmore/meta.py | grep -oE '[0-9\.]+')
           current=$(date '+%Y%m%d%H%M%S')
           echo "__version__ = '${oldv}-${current}'" > knowsmore/meta.py
 

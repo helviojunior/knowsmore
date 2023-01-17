@@ -1,35 +1,86 @@
 #!/usr/bin/python3
 # -*- coding: UTF-8 -*-
 
+'''
+The build version is auto update by local git hook at .git/hooks/pre-push wuth the following content
+
+#!/bin/bash
+
+build=$(printf '0x%x' $(date +%s))
+meta=$(cat knowsmore/meta.py | sed "s/__build__.*/__build__ = "${build}"/")
+echo "$meta" > knowsmore/meta.py
+
+git add ./knowsmore/meta.py
+git commit -m "Update build version"
+
+'''
+
+import os
 from setuptools import setup, find_packages
 
-version = {}
-with open('knowsmore/meta.py') as f:
-    exec(f.read(), version)
+requires = [
+    'requests>=2.28.0',
+    'bs4>=0.0.1',
+    'colorama',
+    'clint>=0.5.1',
+    'tabulate>=0.9.0',
+    'Levenshtein>=0.20.9',
+    'neo4j>=5.4.0',
+    'impacket>=0.10.0'
+]
 
-setup(  name='knowsmore',
-        version=version['__version__'],
-        description='Active Directory, BloodHound, NTDS hashes and Password Cracks correlation tool',
-        author='Hélvio Junior (M4v3r1ck)',
-        author_email='helvio_junior@hotmail.com',
-        url='https://github.com/helviojunior/knowsmore',
-        packages=find_packages(),
-        package_data={'knowsmore': ['resources/*']},
-        install_requires=['requests>=2.28.0',
-                          'bs4>=0.0.1',
-                          'colorama',
-                          'clint>=0.5.1',
-                          'tabulate>=0.9.0',
-                          'Levenshtein>=0.20.9',
-                          'neo4j>=5.4.0',
-                          'impacket>=0.10.0'],
-        readme="README.md",
-        classifiers= [
-            "Programming Language :: Python :: 3",
-            "License :: OSI Approved :: MIT License",
-            "Operating System :: OS Independent",
-        ],
-        entry_points= { 'console_scripts': [
-            'knowsmore=knowsmore.knowsmore:run',
-            ]}
-        )
+meta = {}
+here = os.path.abspath(os.path.dirname(__file__))
+
+with open('knowsmore/meta.py') as f:
+    exec(f.read(), meta)
+
+with open("README.md", "r", encoding="utf-8") as f:
+    readme = f.read()
+
+setup(
+    name=meta["__title__"],
+    version=meta["__version__"],
+    description=meta["__description__"],
+    long_description=readme,
+    long_description_content_type="text/markdown",
+    author=meta["__author__"],
+    author_email=meta["__author_email__"],
+    url=meta["__url__"],
+    packages=find_packages(),
+    package_data={"": ["LICENSE"]},
+    include_package_data=True,
+    python_requires=">=3.7, <4",
+    install_requires=requires,
+    license=meta["__license__"],
+    readme="README.md",
+    zip_safe=False,
+    classifiers=[
+        "Development Status :: 5 - Production/Stable",
+        "Environment :: Active Directory Environment",
+        "Intended Audience :: Developers",
+        "License :: OSI Approved :: GPL-3",
+        "Natural Language :: English",
+        "Operating System :: OS Independent",
+        "Programming Language :: Python",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3 :: Only",
+        "Programming Language :: Python :: Implementation :: PyPy",
+        "Topic :: Microsoft Active Directory :: Pentest",
+        "Topic :: Software Development :: Libraries",
+    ],
+    entry_points={'console_scripts': [
+        'knowsmore=knowsmore.knowsmore:run',
+        ]
+    },
+    project_urls={
+        "Main Author": "https://sec4us.com.br/instrutores/helvio-junior/",
+        "Documentation": "https://github.com/helviojunior/knowsmore",
+        "Source": "https://github.com/helviojunior/knowsmore",
+    },
+)
