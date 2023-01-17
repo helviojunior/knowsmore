@@ -41,12 +41,18 @@ class WordList(CmdBase):
     unique_ch_b = 0
     char_space = LEETS1
     filename = None
+    batch = False
 
     def __init__(self):
         super().__init__('word-list', 'Generates a wordlist based on one word (generally, company name)')
 
     def add_flags(self, flags: _ArgumentGroup):
-        pass
+        flags.add_argument('--batch',
+                           action='store_true',
+                           default=False,
+                           dest=f'batch',
+                           help=Color.s(
+                               'Never ask for user input, use the default behavior'))
 
     def add_commands(self, cmds: _ArgumentGroup):
         cmds.add_argument('--name', action='store', dest='name', help='Name')
@@ -77,6 +83,7 @@ class WordList(CmdBase):
         self.max_size = int(args.max_lenght)
         self.padding = args.padding
         self.no_leets = args.no_leets
+        self.batch = args.batch
 
         if self.min_size < 1:
             self.min_size = 1
@@ -119,7 +126,7 @@ class WordList(CmdBase):
             Tools.exit_gracefully(1)
 
         # 3GB
-        if estimated_size > 1073741824:
+        if estimated_size > 1073741824 and not self.batch:
 
             Logger.p(
                 '{!} {W}Do you want continue? (Y/n): {W}')
