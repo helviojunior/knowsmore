@@ -1,7 +1,7 @@
 # GitHub Action workflow to build and run KnowsMore's tests
 #
 
-name: Build KnowsMore
+name: Test Build
 
 on:
     push:
