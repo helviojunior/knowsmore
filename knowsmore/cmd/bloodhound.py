@@ -1358,7 +1358,7 @@ class Bloodhound(CmdBase):
                 target=entry['ComputerSID'],
                 source_label='User',
                 target_label='Computer',
-                edge_type='',
+                edge_type='SPNTarget',
                 edge_props='{isacl: false, port: prop.port}',
                 filter_type='objectid',
                 props=props
