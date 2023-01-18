@@ -10,6 +10,7 @@ import threading
 import time
 import mimetypes
 import tempfile
+import logging
 from enum import Enum
 from pathlib import Path
 from zipfile import ZipFile
@@ -319,7 +320,7 @@ class Bloodhound(CmdBase):
         #print(entry, thread_callback_data)
 
         query = 'UNWIND $props AS prop MERGE (n:{1} {{{0}: prop.source}}) ON MATCH SET n:{0} ON CREATE SET n:{0} SET n += prop.map'
-        query = query.format(entry['object_label'], entry['filter_type'])
+        query = query.format(entry['filter_type'], entry['object_label'])
 
         props = dict(
             props=dict(
@@ -338,10 +339,10 @@ class Bloodhound(CmdBase):
     def bh_callback2(self, entry, thread_callback_data, **kwargs):
 
         # Merge source and target object too
-        insert_query = 'UNWIND $props AS prop MERGE (n:Base {{{0}: prop.source}}) ON MATCH SET n:{1} ON CREATE SET n:{1} MERGE (m:Base {{objectid: prop.target}}) ON MATCH SET m:{2} ON CREATE SET m:{2} MERGE (n)-[r:{3} {4}]->(m)'
+        #insert_query = 'UNWIND $props AS prop MERGE (n:Base {{{0}: prop.source}}) ON MATCH SET n:{1} ON CREATE SET n:{1} MERGE (m:Base {{objectid: prop.target}}) ON MATCH SET m:{2} ON CREATE SET m:{2} MERGE (n)-[r:{3} {4}]->(m)'
 
         # Merge only the relationship from source and target
-        #insert_query = 'UNWIND $props AS prop MATCH (n:Base {{{0}: prop.source}}) MATCH (m:Base {{objectid: prop.target}}) MERGE (n)-[r:{3} {4}]->(m)'
+        insert_query = 'UNWIND $props AS prop MATCH (n:Base {{{0}: prop.source}}) MATCH (m:Base {{objectid: prop.target}}) MERGE (n)-[r:{3} {4}]->(m)'
 
         #Replace all tags
         insert_query = insert_query.format(entry['source_filter_type'],
@@ -381,39 +382,45 @@ class Bloodhound(CmdBase):
 
         return
 
-    def run(self):
+    def mark_owned(self):
+        Color.pl('{?} {W}{D}Syncing owned objects...{W}')
 
-        if self.mode == Bloodhound.ImportMode.MarkOwned:
-            Color.pl('{?} {W}{D}Syncing owned objects...{W}')
-
-            db_cracked = self.db.select_raw(
-                sql='select c.name, d.name as domain_name, c.type from credentials as c '
+        db_cracked = self.db.select_raw(
+            sql='select c.name, d.name as domain_name, c.type from credentials as c '
                 'inner join passwords as p '
                 'on c.password_id  = p.password_id  '
                 'inner join domains as d '
                 'on c.domain_id = d.domain_id  '
                 'where p.length > 0',
-                args=[]
-            )
+            args=[]
+        )
 
-            with progress.Bar(label=" Marking as owned ", expected_size=len(db_cracked)) as bar:
-                try:
-                    for idx, row in enumerate(db_cracked):
-                        bar.show(idx)
+        with progress.Bar(label=" Marking as owned ", expected_size=len(db_cracked)) as bar:
+            try:
+                for idx, row in enumerate(db_cracked):
+                    bar.show(idx)
 
-                        bh_name = f'{row["name"]}@{row["domain_name"]}'
-                        if row['type'] == "M":
-                            bh_name = f'{row["name"]}.{row["domain_name"]}'
+                    bh_name = f'{row["name"]}@{row["domain_name"]}'
+                    if row['type'] == "M":
+                        bh_name = f'{row["name"]}.{row["domain_name"]}'
 
-                        self.bh_connection.set_owned(bh_name, True)
+                    self.bh_connection.set_owned(bh_name, True)
 
-                    #print(self.bh_connection.get_all_owned())
+                # print(self.bh_connection.get_all_owned())
 
-                except KeyboardInterrupt as e:
-                    raise e
-                finally:
-                    bar.hide = True
-                    Tools.clear_line()
+            except KeyboardInterrupt as e:
+                raise e
+            finally:
+                bar.hide = True
+                Tools.clear_line()
+
+    def run(self):
+
+        # Disable warning logs of neo4j driver
+        logging.getLogger().setLevel(logging.ERROR)
+
+        if self.mode == Bloodhound.ImportMode.MarkOwned:
+            self.mark_owned()
 
         elif self.mode == Bloodhound.ImportMode.Sync:
 
@@ -433,7 +440,7 @@ class Bloodhound(CmdBase):
                 with BloodhoundSync(callback=self.bh_callback1, per_thread_callback=self.thread_start_callback, threads=6) as t:
                     t.start()
 
-                    t1 = threading.Thread(target=self.status, kwargs=dict(sync=t, total=total, text="Syncing objects (step 1/4)"))
+                    t1 = threading.Thread(target=self.status, kwargs=dict(sync=t, total=total, text="Syncing objects (step 1/5)"))
                     t1.daemon = True
                     t1.start()
 
@@ -444,6 +451,7 @@ class Bloodhound(CmdBase):
                                 self.db.update(
                                     'bloodhound_objects',
                                     filter_data={'object_id': row},
+                                    updated_date=datetime.datetime.now() - datetime.timedelta(seconds=60),
                                     sync_date=datetime.datetime.now()
                                 )
                             self.synced = []
@@ -481,7 +489,7 @@ class Bloodhound(CmdBase):
                         Tools.clear_line()
                         Color.pl('{?} {W}{D}Updating synced objects, wait a few seconds...{W}')
 
-                        with progress.Bar(label=" Updating synced objects (step 2/4) ", expected_size=len(self.synced)) as bar:
+                        with progress.Bar(label=" Updating synced objects (step 2/5) ", expected_size=len(self.synced)) as bar:
                             try:
                                 for idx, row in enumerate(self.synced):
                                     bar.show(idx)
@@ -489,6 +497,7 @@ class Bloodhound(CmdBase):
                                     self.db.update(
                                         'bloodhound_objects',
                                         filter_data={'object_id': row},
+                                        updated_date=datetime.datetime.now() - datetime.timedelta(seconds=60),
                                         sync_date=datetime.datetime.now()
                                     )
 
@@ -517,7 +526,7 @@ class Bloodhound(CmdBase):
                 with BloodhoundSync(callback=self.bh_callback2, per_thread_callback=self.thread_start_callback, threads=6) as t:
                     t.start()
 
-                    t1 = threading.Thread(target=self.status, kwargs=dict(sync=t, total=total, text="Syncing edges (step 3/4)"))
+                    t1 = threading.Thread(target=self.status, kwargs=dict(sync=t, total=total, text="Syncing edges (step 3/5)"))
                     t1.daemon = True
                     t1.start()
 
@@ -527,6 +536,7 @@ class Bloodhound(CmdBase):
                                 self.db.update(
                                     'bloodhound_edge',
                                     filter_data={'edge_id': row},
+                                    updated_date=datetime.datetime.now() - datetime.timedelta(seconds=60),
                                     sync_date=datetime.datetime.now()
                                 )
                             self.synced = []
@@ -564,7 +574,7 @@ class Bloodhound(CmdBase):
                         Tools.clear_line()
                         Color.pl('{?} {W}{D}Updating synced objects, wait a few seconds...{W}')
 
-                        with progress.Bar(label=" Updating synced objects (step 4/4) ", expected_size=len(self.synced)) as bar:
+                        with progress.Bar(label=" Updating synced objects (step 4/5) ", expected_size=len(self.synced)) as bar:
                             try:
                                 for idx, row in enumerate(self.synced):
                                     bar.show(idx)
@@ -572,6 +582,7 @@ class Bloodhound(CmdBase):
                                     self.db.update(
                                         'bloodhound_edge',
                                         filter_data={'edge_id': row},
+                                        updated_date=datetime.datetime.now() - datetime.timedelta(seconds=60),
                                         sync_date=datetime.datetime.now()
                                     )
 
@@ -580,6 +591,8 @@ class Bloodhound(CmdBase):
                             finally:
                                 bar.hide = True
                                 Tools.clear_line()
+
+            self.mark_owned()
 
         elif self.mode == Bloodhound.ImportMode.Import:
             start_date = datetime.datetime.now()
