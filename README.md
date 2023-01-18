@@ -1,8 +1,8 @@
 # Knows More
 
-[![Downloads](https://pepy.tech/badge/knowsmore/month)](https://pepy.tech/project/requests)
-[![Supported Versions](https://img.shields.io/pypi/pyversions/knowsmore.svg)](https://pypi.org/project/requests)
-[![Contributors](https://img.shields.io/github/contributors/helviojunior/knowsmore.svg)](https://github.com/helviojunior/requests/graphs/contributors)
+[![Downloads](https://pepy.tech/badge/knowsmore/month)](https://pepy.tech/project/knowsmore)
+[![Supported Versions](https://img.shields.io/pypi/pyversions/knowsmore.svg)](https://pypi.org/project/knowsmore)
+[![Contributors](https://img.shields.io/github/contributors/helviojunior/knowsmore.svg)](https://github.com/helviojunior/knowsmore/graphs/contributors)
 
 KnowsMore officially supports Python 3.7+.
 
