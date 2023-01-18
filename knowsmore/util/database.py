@@ -128,6 +128,8 @@ class Database(object):
             sql += " WHERE {}".format(f' {operator} '.join([f'{col} = ?' for col in columns]))
 
         cursor = conn.execute(sql, values)
+        if cursor.rowcount == 0:
+            return []
 
         columns = cursor.description
         return [{columns[index][0]: column for index, column in enumerate(value)} for value in cursor.fetchall()]
@@ -141,6 +143,8 @@ class Database(object):
     @connect
     def select_raw(self, conn, sql: str, args: any):
         cursor = conn.execute(sql, tuple(args,))
+        if cursor.rowcount == 0:
+            return []
         columns = cursor.description
         return [{columns[index][0]: column for index, column in enumerate(value)} for value in cursor.fetchall()]
 
@@ -156,6 +160,8 @@ class Database(object):
         if len(columns) > 0:
             sql += " WHERE {}".format(f' {operator} '.join([f'{col} = ?' for col in columns]))
         cursor = conn.execute(sql, values)
+        if cursor.rowcount == 0:
+            return 0
         data = cursor.fetchone()
 
         return int(data[0])
