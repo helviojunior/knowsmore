@@ -149,7 +149,7 @@ class Bloodhound(CmdBase):
         @staticmethod
         def _set_owned(tx: Transaction, account: str, owned: bool = True):
             result = tx.run("UNWIND $props AS prop MERGE (n:Base {objectid: prop.source}) SET n += prop.map RETURN n.name as name, n.owned as owned LIMIT 1",
-                            props=dict(source=account, owned=owned)
+                            props=dict(source=account, map=dict(owned=owned))
                             )
             rst = result.single()
             if rst is None:
