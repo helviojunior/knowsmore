@@ -5,8 +5,8 @@
 [![Downloads](https://pepy.tech/badge/knowsmore/month)](https://pepy.tech/project/knowsmore)
 [![Supported Versions](https://img.shields.io/pypi/pyversions/knowsmore.svg)](https://pypi.org/project/knowsmore)
 [![Contributors](https://img.shields.io/github/contributors/helviojunior/knowsmore.svg)](https://github.com/helviojunior/knowsmore/graphs/contributors)
-![PyPI version](https://img.shields.io/pypi/v/knowsmore.svg)
-![License: GPL-3.0](https://img.shields.io/pypi/l/knowsmore.svg)
+[![PyPI version](https://img.shields.io/pypi/v/knowsmore.svg)](https://pypi.org/project/knowsmore/)
+[![License: GPL-3.0](https://img.shields.io/pypi/l/knowsmore.svg)](https://github.com/helviojunior/knowsmore/blob/main/LICENSE)
 
 KnowsMore officially supports Python 3.8+.
 
