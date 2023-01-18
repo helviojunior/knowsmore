@@ -339,10 +339,10 @@ class Bloodhound(CmdBase):
     def bh_callback2(self, entry, thread_callback_data, **kwargs):
 
         # Merge source and target object too
-        #insert_query = 'UNWIND $props AS prop MERGE (n:Base {{{0}: prop.source}}) ON MATCH SET n:{1} ON CREATE SET n:{1} MERGE (m:Base {{objectid: prop.target}}) ON MATCH SET m:{2} ON CREATE SET m:{2} MERGE (n)-[r:{3} {4}]->(m)'
+        insert_query = 'UNWIND $props AS prop MERGE (n:Base {{{0}: prop.source}}) ON MATCH SET n:{1} ON CREATE SET n:{1} MERGE (m:Base {{objectid: prop.target}}) ON MATCH SET m:{2} ON CREATE SET m:{2} MERGE (n)-[r:{3} {4}]->(m)'
 
         # Merge only the relationship from source and target
-        insert_query = 'UNWIND $props AS prop MATCH (n:Base {{{0}: prop.source}}) MATCH (m:Base {{objectid: prop.target}}) MERGE (n)-[r:{3} {4}]->(m)'
+        #insert_query = 'UNWIND $props AS prop MATCH (n:Base {{{0}: prop.source}}) MATCH (m:Base {{objectid: prop.target}}) MERGE (n)-[r:{3} {4}]->(m)'
 
         #Replace all tags
         insert_query = insert_query.format(entry['source_filter_type'],
