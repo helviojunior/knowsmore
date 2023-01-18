@@ -395,24 +395,25 @@ class Bloodhound(CmdBase):
             args=[]
         )
 
-        with progress.Bar(label=" Marking as owned ", expected_size=len(db_cracked)) as bar:
-            try:
-                for idx, row in enumerate(db_cracked):
-                    bar.show(idx)
+        if len(db_cracked) > 0:
+            with progress.Bar(label=" Marking as owned ", expected_size=len(db_cracked)) as bar:
+                try:
+                    for idx, row in enumerate(db_cracked):
+                        bar.show(idx)
 
-                    bh_name = f'{row["name"]}@{row["domain_name"]}'
-                    if row['type'] == "M":
-                        bh_name = f'{row["name"]}.{row["domain_name"]}'
+                        bh_name = f'{row["name"]}@{row["domain_name"]}'
+                        if row['type'] == "M":
+                            bh_name = f'{row["name"]}.{row["domain_name"]}'
 
-                    self.bh_connection.set_owned(bh_name, True)
+                        self.bh_connection.set_owned(bh_name, True)
 
-                # print(self.bh_connection.get_all_owned())
+                    # print(self.bh_connection.get_all_owned())
 
-            except KeyboardInterrupt as e:
-                raise e
-            finally:
-                bar.hide = True
-                Tools.clear_line()
+                except KeyboardInterrupt as e:
+                    raise e
+                finally:
+                    bar.hide = True
+                    Tools.clear_line()
 
     def run(self):
 
