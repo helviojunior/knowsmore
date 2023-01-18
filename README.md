@@ -4,7 +4,7 @@
 [![Supported Versions](https://img.shields.io/pypi/pyversions/knowsmore.svg)](https://pypi.org/project/knowsmore)
 [![Contributors](https://img.shields.io/github/contributors/helviojunior/knowsmore.svg)](https://github.com/helviojunior/knowsmore/graphs/contributors)
 
-KnowsMore officially supports Python 3.7+.
+KnowsMore officially supports Python 3.8+.
 
 ## Main features
 
