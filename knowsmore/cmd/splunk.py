@@ -108,6 +108,7 @@ class Splunk(CmdBase):
                 for entry in self.db.get_data(
                         export_password=self.include_password,
                         cracked_only=self.cracked_only):
+                    count += 1
 
                     if count > total:
                         bar.expected_size = count
@@ -115,7 +116,8 @@ class Splunk(CmdBase):
 
                     # Integrate with Splunk Here
                     txt_entry = json.dumps(entry)
-                    print(txt_entry)
+                    #print(txt_entry)
+                    #time.sleep(0.0300)
 
             except KeyboardInterrupt as e:
                 raise e
