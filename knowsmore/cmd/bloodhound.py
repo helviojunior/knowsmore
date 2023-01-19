@@ -41,6 +41,7 @@ class Bloodhound(CmdBase):
     domain_cache = {}
     mode = ImportMode.Undefined
     synced = []
+    tasks = 6
 
     class BloodhoundFile:
         file_name = None
@@ -188,6 +189,14 @@ class Bloodhound(CmdBase):
         super().__init__('bloodhound', 'Import BloodHound files')
 
     def add_flags(self, flags: _ArgumentGroup):
+        flags.add_argument('-T',
+                           action='store',
+                           metavar='[tasks]',
+                           type=int,
+                           default=6,
+                           dest=f'tasks',
+                           help=Color.s('number of connects in parallel (per host, default: 6)'))
+
         flags.add_argument('--enable-group-chain',
                            action='store_true',
                            default=False,
@@ -306,6 +315,9 @@ class Bloodhound(CmdBase):
         if self.mode == Bloodhound.ImportMode.Undefined:
             Logger.pl('{!} {R}error: Nor {O}--import-data{R} or {O}--mark-owned{R} was provided{W}\r\n')
             Tools.exit_gracefully(1)
+
+        if args.tasks >= 1:
+            self.tasks = int(args.tasks)
 
         self.db = self.open_db(args)
 
@@ -438,7 +450,7 @@ class Bloodhound(CmdBase):
                 if total > 10000:
                     Color.pl('{?} {W}{D}this could take a while so go grab a redbull...{W}')
 
-                with BloodhoundSync(callback=self.bh_callback1, per_thread_callback=self.thread_start_callback, threads=6) as t:
+                with BloodhoundSync(callback=self.bh_callback1, per_thread_callback=self.thread_start_callback, threads=self.tasks) as t:
                     t.start()
 
                     t1 = threading.Thread(target=self.status, kwargs=dict(sync=t, total=total, text="Syncing objects (step 1/5)"))
@@ -524,7 +536,7 @@ class Bloodhound(CmdBase):
                 elif total > 5000:
                     Color.pl('{?} {W}{D}this could take a while so go grab a redbull...{W}')
 
-                with BloodhoundSync(callback=self.bh_callback2, per_thread_callback=self.thread_start_callback, threads=6) as t:
+                with BloodhoundSync(callback=self.bh_callback2, per_thread_callback=self.thread_start_callback, threads=self.tasks) as t:
                     t.start()
 
                     t1 = threading.Thread(target=self.status, kwargs=dict(sync=t, total=total, text="Syncing edges (step 3/5)"))
