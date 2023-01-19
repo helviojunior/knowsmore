@@ -97,14 +97,39 @@ class Bloodhound(CmdBase):
                     with open(self.file_name, 'r', encoding="latin-1", errors="surrogateescape") as f:
                         return json.load(f)
 
+    class BloodHoundVersion:
+        major = 0
+        minor = 0
+        release = ''
+        name = ''
+        edition = ''
+
+        def __init__(self, name: str, edition: str, version: str):
+            from pkg_resources import parse_version
+
+            v = parse_version(version)
+
+            self.major = v.major
+            self.minor = v.minor
+            self.release = version.replace(f"{self.major}.{self.minor}", "").strip(". ")
+            self.name = name
+            self.edition = edition
+
+        def __str__(self):
+            return f"{self.name} {self.edition} v{self.major}.{self.minor}.{self.release}"
+
+
     class BloodHoundConnection:
 
         database = None
+        version = None
 
         def __init__(self, uri, user, password, database):
             self.driver = GraphDatabase.driver(uri, auth=(user, password))
             try:
                 self.driver.verify_connectivity()
+
+                self.version = self.get_version()
 
             except exceptions.ServiceUnavailable as e:
                 raise e
@@ -162,9 +187,101 @@ class Bloodhound(CmdBase):
             }
             return ret_data
 
-        def add_constraints(self):
+        def set_schema(self):
+            """Adds bloodhound schema to neo4j
+
+            Arguments:
+                tx {neo4j.Transaction} -- Neo4j transaction.
+            """
+            luceneIndexProvider = "lucene+native-3.0"
+            labels = ["User", "Group", "Computer", "GPO", "OU", "Domain", "Container", "Base",
+                      "AZBase", "AZApp", "AZDevice", "AZGroup", "AZKeyVault", "AZResourceGroup",
+                      "AZServicePrincipal", "AZTenant", "AZUser", "AZVM"]
+            azLabels = ["AZBase", "AZApp", "AZDevice", "AZGroup", "AZKeyVault", "AZResourceGroup",
+                        "AZServicePrincipal", "AZTenant", "AZUser", "AZVM"]
+            schema = {}
+            for label in labels:
+                schema[label] = dict(
+                    name=label,
+                    indexes=[dict(
+                        name="{}_{}_index".format(label.lower(), "name"),
+                        provider=luceneIndexProvider,
+                        property="name"
+                    )],
+                    constraints=[dict(
+                        name="{}_{}_constraint".format(label.lower(), "objectid"),
+                        provider=luceneIndexProvider,
+                        property="objectid"
+                    )],
+                )
+
+            for label in azLabels:
+                schema[label]["indexes"].append({
+                    'name': "{}_{}_index".format(label.lower(), "azname"),
+                    'provider': luceneIndexProvider,
+                    'property': "azname"
+                })
+
+            for label in labels:
+                for constraint in schema[label]['constraints']:
+
+                    try:
+                        if self.version.major >= 5:
+                            query = f"CREATE CONSTRAINT {constraint['name']} IF NOT EXISTS FOR (b:{label}) REQUIRE b.{constraint['property']} IS UNIQUE"
+                        else:
+                            query = f"CREATE CONSTRAINT {constraint['name']} IF NOT EXISTS ON (b:{label}) ASSERT b.{constraint['property']} IS UNIQUE"
+
+                        with self.driver.session(database=self.database) as session:
+                            session.execute_write(self.execute, query)
+
+                    except Exception as e:
+                        #print(e)
+                        pass
+
+                for index in schema[label]['indexes']:
+                    props = dict(
+                        name=index['name'],
+                        label=[label],
+                        properties=[index['property']],
+                        provider=index['provider']
+                    )
+                    try:
+                        if self.version.major >= 5:
+                            query = f"CREATE INDEX {index['name']} IF NOT EXISTS FOR (b:{label}) ON (b.{index['property']})"
+                        else:
+                            query = "CALL db.createIndex($name, $label, $properties, $provider)"
+
+                        #print(query)
+                        with self.driver.session(database=self.database) as session:
+                            session.execute_write(self.execute, query, **props)
+
+                    except Exception as e:
+                        #print(e)
+                        pass
+
+        def get_version(self) -> list:
             with self.driver.session(database=self.database) as session:
-                return session.execute_write(self._add_constraints)
+                return session.execute_read(self._get_version)
+
+        @staticmethod
+        def _get_version(tx: Transaction):
+            result = tx.run(
+                "call dbms.components() yield name, versions, edition unwind versions as version return name, version, edition;",
+                )
+            rst = result.single()
+            if rst is None:
+                return None
+
+            return Bloodhound.BloodHoundVersion(
+                name=rst.get("name", None),
+                version=rst.get("version", '0.0.0'),
+                edition=rst.get("edition", None)
+            )
+
+
+        #def add_constraints(self):
+        #    with self.driver.session(database=self.database) as session:
+        #        return session.execute_write(self._add_constraints)
 
         @staticmethod
         def _add_constraints(tx: Transaction):
@@ -184,6 +301,7 @@ class Bloodhound(CmdBase):
             tx.run("CREATE CONSTRAINT ON (c:Domain) ASSERT c.name IS UNIQUE")
             tx.run("CREATE CONSTRAINT ON (c:OU) ASSERT c.guid IS UNIQUE")
             tx.run("CREATE CONSTRAINT ON (c:GPO) ASSERT c.name IS UNIQUE")
+
 
     def __init__(self):
         super().__init__('bloodhound', 'Import BloodHound files')
@@ -277,14 +395,14 @@ class Bloodhound(CmdBase):
                     e))
                 Tools.exit_gracefully(1)
 
-            try:
-                self.bh_connection.add_constraints()
-            except ClientError:
-                pass
-            except Exception as e:
-                Logger.pl('{!} {R}error: Fail adding BloodHound constraints Neo4j Database: {O}%s{R} {W}\r\n' % (
-                    e))
-                Tools.exit_gracefully(1)
+            #try:
+            #    self.bh_connection.add_constraints()
+            #except ClientError:
+            #    pass
+            #except Exception as e:
+            #    Logger.pl('{!} {R}error: Fail adding BloodHound constraints Neo4j Database: {O}%s{R} {W}\r\n' % (
+            #        e))
+            #    Tools.exit_gracefully(1)
 
         elif args.bhfile is not None and args.bhfile.strip() != '':
 
@@ -351,7 +469,7 @@ class Bloodhound(CmdBase):
     def bh_callback2(self, entry, thread_callback_data, **kwargs):
 
         # Merge source and target object too
-        insert_query = 'UNWIND $props AS prop MERGE (n:Base {{{0}: prop.source}}) ON MATCH SET n:{1} ON CREATE SET n:{1} MERGE (m:Base {{objectid: prop.target}}) ON MATCH SET m:{2} ON CREATE SET m:{2} MERGE (n)-[r:{3} {4}]->(m)'
+        insert_query = 'UNWIND $props AS prop MERGE (n:{1} {{{0}: prop.source}}) ON MATCH SET n:{1} ON CREATE SET n:{1} MERGE (m:{2} {{objectid: prop.target}}) ON MATCH SET m:{2} ON CREATE SET m:{2} MERGE (n)-[r:{3} {4}]->(m)'
 
         # Merge only the relationship from source and target
         #insert_query = 'UNWIND $props AS prop MATCH (n:Base {{{0}: prop.source}}) MATCH (m:Base {{objectid: prop.target}}) MERGE (n)-[r:{3} {4}]->(m)'
@@ -367,6 +485,7 @@ class Bloodhound(CmdBase):
             props=json.loads(entry['props']),
         )
 
+        #print(insert_query)
         thread_callback_data.write_transaction(
             Bloodhound.BloodHoundConnection.execute,
             insert_query,
@@ -430,12 +549,31 @@ class Bloodhound(CmdBase):
     def run(self):
 
         # Disable warning logs of neo4j driver
-        logging.getLogger().setLevel(logging.ERROR)
+        logging.getLogger().setLevel(logging.DEBUG)
 
         if self.mode == Bloodhound.ImportMode.MarkOwned:
+            try:
+                Color.pl('{?} {W}{D}Setting neo4j bloodhound schema...{W}')
+                self.bh_connection.set_schema()
+            except ClientError:
+                pass
+            except Exception as e:
+                Logger.pl('{!} {R}error: Fail adding BloodHound schema Neo4j Database: {O}%s{R} {W}\r\n' % (
+                    e))
+                Tools.exit_gracefully(1)
+
             self.mark_owned()
 
         elif self.mode == Bloodhound.ImportMode.Sync:
+            try:
+                Color.pl('{?} {W}{D}Setting neo4j bloodhound schema...{W}')
+                self.bh_connection.set_schema()
+            except ClientError:
+                pass
+            except Exception as e:
+                Logger.pl('{!} {R}error: Fail adding BloodHound schema Neo4j Database: {O}%s{R} {W}\r\n' % (
+                    e))
+                Tools.exit_gracefully(1)
 
             Color.pl('{?} {W}{D}Syncing objects...{W}')
 
