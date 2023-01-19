@@ -262,7 +262,7 @@ class Database(object):
         if Database.db_connection is not None:
             return Database.db_connection
 
-        conn = sqlite3.connect(self.db_name)
+        conn = sqlite3.connect(self.db_name, detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
         conn.create_function('log', 2, math.log)
 
         if check:
