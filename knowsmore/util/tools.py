@@ -85,7 +85,10 @@ class Tools:
     @staticmethod
     def get_tabulated(data: list) -> str:
 
-        headers = [(h if h[0:2] != '__' else ' ') for h in data[0].keys()]
+        if len(data) == 0:
+            return ''
+
+        headers = [(h if len(h) > 2 and h[0:2] != '__' else ' ') for h in data[0].keys()]
         data = [item.values() for item in data]
 
         return tabulate(data, headers, tablefmt='psql')

@@ -58,6 +58,8 @@ from __future__ import division
 from __future__ import print_function
 import argparse
 import codecs
+import datetime
+import json
 import logging
 import os
 import sys
@@ -541,8 +543,93 @@ class SecretsDump(CmdBase):
             print(secret)
             raise Exception('Implement!')
 
-    def add_credential(self, domain, name, hash):
+    def add_credential(self, domain, name, hash, rid: str = '', sid: str = ''):
+
+        domain_id = -1
+        name = name.lower()
+        bloodhound_object = None
+        label = ''
+
+        # find by object id
+        if sid is not None and sid.strip() != '' and len(sid) > 30 and sid[0:2].upper() == "S-":
+            tmp = sid.split("-")
+            if len(tmp) >= 5:
+                # Temos um possível SID válido
+                if tmp[-1].upper() == rid.upper():
+                    domainsid = sid[:-1]
+                    d = self.db.select_raw(
+                        sql="select domain_id from domains as d "
+                            "where object_identifier = ?",
+                        args=[domainsid.upper()]
+                    )
+                    if len(d) == 1:  # Not permit duplicity
+                        domain_id = d[0]['domain_id']
+
+                    obj = self.db.select_raw(
+                        sql="select props, name, object_label from bloodhound_objects as o "
+                            "where object_id = ? "
+                            "and object_label in ('User', 'Computer')",
+                        args=[sid]
+                    )
+                    if len(obj) == 1:  # Not permit duplicity
+                        try:
+                            bloodhound_object = json.loads(obj[0]['props'])
+                            label = obj[0]['object_label']
+                        except:
+                            pass
+
+        # find by r_id and name
+        if bloodhound_object is None and rid is not None and rid.strip() != '':
+            s_name = name
+            if s_name.endswith('$'):
+                s_name = s_name[:-1]
+            obj = self.db.select_raw(
+                sql="select props, name, object_label from bloodhound_objects as o "
+                    "where r_id = ? and name = ? "
+                    "and object_label in ('User', 'Computer')",
+                args=[rid, s_name.upper()]
+            )
+            if len(obj) == 1:  # Not permit duplicity
+                try:
+                    bloodhound_object = json.loads(obj[0]['props'])
+                    label = obj[0]['object_label']
+                except:
+                    pass
+
         type = 'U'
+        if bloodhound_object is not None:
+            p_name = bloodhound_object.get('name', '').lower()
+            p_domain = bloodhound_object.get('domain', '').lower()
+            p_domainsid = bloodhound_object.get('domainsid', '').upper()
+            p_name = p_name.replace(f'@{p_domain}', '').replace(f'.{p_domain}', '')
+            p_dn = bloodhound_object.get('distinguishedname', '')
+            p_sid = bloodhound_object.get('source', '')
+            p_full_name = bloodhound_object.get('displayname', '')
+            p_pwd_last_set = datetime.datetime.fromtimestamp(bloodhound_object.get('pwdlastset', 0))
+            p_enabled = bool(bloodhound_object.get('enabled', True))
+            type = 'M' if label.lower() == 'machine' else 'U'
+            if p_name == name:
+                if domain_id == -1:
+                    domain_id = self.get_domain(
+                        name=domain,
+                        object_identifier=p_domainsid
+                    )
+                if domain_id != -1:
+                    self.db.insert_or_update_credential(
+                        domain=domain_id,
+                        username=name,
+                        ntlm_hash=hash,
+                        type=type,
+                        dn=p_dn,
+                        full_name=p_full_name,
+                        object_identifier=p_sid,
+                        pwd_last_set=p_pwd_last_set,
+                        enabled=p_enabled
+                    )
+                    return
+
+        # o processo via bloodhound, não deu certo, vamos para o fallback então
+        #print(name, rid, sid)
         if name.endswith('$'):
             name = name[:-1]
             type = 'M'
@@ -579,7 +666,7 @@ class SecretsDump(CmdBase):
             type=type,
         )
 
-    def get_domain(self, name: str) -> int:
+    def get_domain(self, name: str, object_identifier: str = '') -> int:
 
         name = name.lower()
 
@@ -587,7 +674,8 @@ class SecretsDump(CmdBase):
             return self.domain_cache[name]
 
         domain_id = self.db.insert_or_get_domain(
-            domain=name
+            domain=name,
+            object_identifier=object_identifier
         )
 
         if domain_id == -1:

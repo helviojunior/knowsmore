@@ -148,9 +148,9 @@ class Bloodhound(CmdBase):
             with self.driver.session(database=self.database) as session:
                 return session.execute_read(self._get_owned)
 
-        def set_owned(self, account: str, owned: bool = True):
+        def set_owned(self, source_filter_type: str, source_label: str, source:str, owned: bool = True):
             with self.driver.session(database=self.database) as session:
-                return session.execute_write(self._set_owned, account, owned)
+                return session.execute_write(self._set_owned, source_filter_type, source_label, source, owned)
 
         def get_session(self) -> Session:
             return self.driver.session(database=self.database)
@@ -173,9 +173,13 @@ class Bloodhound(CmdBase):
             return accounts
 
         @staticmethod
-        def _set_owned(tx: Transaction, account: str, owned: bool = True):
-            result = tx.run("UNWIND $props AS prop MERGE (n:Base {objectid: prop.source}) SET n += prop.map RETURN n.name as name, n.owned as owned LIMIT 1",
-                            props=dict(source=account, map=dict(owned=owned))
+        def _set_owned(tx: Transaction, source_filter_type: str, source_label: str, source: str, owned: bool = True):
+            query = 'UNWIND $props AS prop MATCH (n:Base {{{0}: prop.objectid}}) SET n:{1} SET n += prop.map RETURN n.name as name, n.owned as owned LIMIT 1'
+            #query = 'UNWIND $props AS prop MERGE (n:Base {{{0}: prop.source}}) ON MATCH SET n:{1} ON CREATE SET n:{1} SET n += prop.map RETURN n.name as name, n.owned as owned LIMIT 1'
+            #query = "UNWIND $props AS prop MATCH (n:{1} {{0}: prop.source}) SET n += prop.map RETURN n.name as name, n.owned as owned LIMIT 1"\
+            query = query.format(source_filter_type, source_label)
+            result = tx.run(query,
+                            props=dict(objectid=source.upper(), map=dict(owned=owned))
                             )
             rst = result.single()
             if rst is None:
@@ -449,13 +453,16 @@ class Bloodhound(CmdBase):
     def bh_callback1(self, entry, thread_callback_data, **kwargs):
         #print(entry, thread_callback_data)
 
-        query = 'UNWIND $props AS prop MERGE (n:{1} {{{0}: prop.source}}) ON MATCH SET n:{0} ON CREATE SET n:{0} SET n += prop.map'
+        #https://github.com/BloodHoundAD/BloodHound/blob/master/src/js/newingestion.js
+
+        #query = 'UNWIND $props AS prop MERGE (n:Base {{{0}: prop.source}}) ON MATCH SET n:{1} ON CREATE SET n:{1} SET n += prop.map'
+        query = 'UNWIND $props AS prop MERGE (n:Base {{{0}:prop.objectid}}) SET n:{1} SET n += prop.map'
         query = query.format(entry['filter_type'], entry['object_label'])
 
         props = dict(
             props=dict(
                 map=json.loads(entry['props']),
-                source=entry['object_id']
+                objectid=entry['object_id'].upper()
             )
         )
 
@@ -468,8 +475,13 @@ class Bloodhound(CmdBase):
 
     def bh_callback2(self, entry, thread_callback_data, **kwargs):
 
+
+        #https://github.com/BloodHoundAD/BloodHound/blob/master/src/js/newingestion.js
+
+
         # Merge source and target object too
-        insert_query = 'UNWIND $props AS prop MERGE (n:{1} {{{0}: prop.source}}) ON MATCH SET n:{1} ON CREATE SET n:{1} MERGE (m:{2} {{objectid: prop.target}}) ON MATCH SET m:{2} ON CREATE SET m:{2} MERGE (n)-[r:{3} {4}]->(m)'
+        #insert_query = 'UNWIND $props AS prop MERGE (n:Base {{{0}: prop.source}}) ON MATCH SET n:{1} ON CREATE SET n:{1} MERGE (m:Base {{objectid: prop.target}}) ON MATCH SET m:{2} ON CREATE SET m:{2} MERGE (n)-[r:{3} {4}]->(m)'
+        insert_query = 'UNWIND $props AS prop MERGE (n:Base {{{0}: prop.source}}) SET n:{1} MERGE (m:Base {{objectid: prop.target}}) SET m:{2} MERGE (n)-[r:{3} {4}]->(m)'
 
         # Merge only the relationship from source and target
         #insert_query = 'UNWIND $props AS prop MATCH (n:Base {{{0}: prop.source}}) MATCH (m:Base {{objectid: prop.target}}) MERGE (n)-[r:{3} {4}]->(m)'
@@ -517,7 +529,7 @@ class Bloodhound(CmdBase):
         Color.pl('{?} {W}{D}Syncing owned objects...{W}')
 
         db_cracked = self.db.select_raw(
-            sql='select c.name, d.name as domain_name, c.type from credentials as c '
+            sql='select c.name, d.name as domain_name, c.type, c.object_identifier from credentials as c '
                 'inner join passwords as p '
                 'on c.password_id  = p.password_id  '
                 'inner join domains as d '
@@ -532,11 +544,22 @@ class Bloodhound(CmdBase):
                     for idx, row in enumerate(db_cracked):
                         bar.show(idx)
 
-                        bh_name = f'{row["name"]}@{row["domain_name"]}'
-                        if row['type'] == "M":
-                            bh_name = f'{row["name"]}.{row["domain_name"]}'
+                        label = "Computer" if row['type'] == "M" else "User"
+                        if row['object_identifier'] is not None and row['object_identifier'].strip() != '':
+                            filter_type = "objectid"
+                            source = row['object_identifier']
+                        else:
+                            filter_type = "name"
+                            source = f'{row["name"]}@{row["domain_name"]}'.upper()
+                            if row['type'] == "M":
+                                source = f'{row["name"]}.{row["domain_name"]}'.upper()
 
-                        self.bh_connection.set_owned(bh_name, True)
+                        self.bh_connection.set_owned(
+                            source_filter_type=filter_type,
+                            source_label=label,
+                            source=source,
+                            owned=True
+                        )
 
                     # print(self.bh_connection.get_all_owned())
 
@@ -591,7 +614,7 @@ class Bloodhound(CmdBase):
                 with BloodhoundSync(callback=self.bh_callback1, per_thread_callback=self.thread_start_callback, threads=self.tasks) as t:
                     t.start()
 
-                    t1 = threading.Thread(target=self.status, kwargs=dict(sync=t, total=total, text="Syncing objects (step 1/5)"))
+                    t1 = threading.Thread(target=self.status, kwargs=dict(sync=t, total=total, text="Syncing objects (step 1/4)"))
                     t1.daemon = True
                     t1.start()
 
@@ -640,7 +663,7 @@ class Bloodhound(CmdBase):
                         Tools.clear_line()
                         Color.pl('{?} {W}{D}Updating synced objects, wait a few seconds...{W}')
 
-                        with progress.Bar(label=" Updating synced objects (step 2/5) ", expected_size=len(self.synced)) as bar:
+                        with progress.Bar(label=" Updating synced objects (step 2/4) ", expected_size=len(self.synced)) as bar:
                             try:
                                 for idx, row in enumerate(self.synced):
                                     bar.show(idx)
@@ -677,7 +700,7 @@ class Bloodhound(CmdBase):
                 with BloodhoundSync(callback=self.bh_callback2, per_thread_callback=self.thread_start_callback, threads=self.tasks) as t:
                     t.start()
 
-                    t1 = threading.Thread(target=self.status, kwargs=dict(sync=t, total=total, text="Syncing edges (step 3/5)"))
+                    t1 = threading.Thread(target=self.status, kwargs=dict(sync=t, total=total, text="Syncing edges (step 3/4)"))
                     t1.daemon = True
                     t1.start()
 
@@ -725,7 +748,7 @@ class Bloodhound(CmdBase):
                         Tools.clear_line()
                         Color.pl('{?} {W}{D}Updating synced objects, wait a few seconds...{W}')
 
-                        with progress.Bar(label=" Updating synced objects (step 4/5) ", expected_size=len(self.synced)) as bar:
+                        with progress.Bar(label=" Updating synced objects (step 4/4) ", expected_size=len(self.synced)) as bar:
                             try:
                                 for idx, row in enumerate(self.synced):
                                     bar.show(idx)
@@ -743,6 +766,7 @@ class Bloodhound(CmdBase):
                                 bar.hide = True
                                 Tools.clear_line()
 
+            #Mark owned objects
             self.mark_owned()
 
         elif self.mode == Bloodhound.ImportMode.Import:
@@ -813,7 +837,8 @@ class Bloodhound(CmdBase):
                         'order by o.object_label',
                     args=[start_date, start_date, start_date])
 
-                Color.pl('{W}{D}%s{W}' % Tools.get_tabulated(imported))
+                if len(imported) > 0:
+                    Color.pl('{W}{D}%s{W}' % Tools.get_tabulated(imported))
 
     def parse_files(self, files: list[BloodhoundFile]):
 
@@ -1358,6 +1383,10 @@ class Bloodhound(CmdBase):
 
                         domain_id = self.get_domain(properties)
 
+                        full_name = properties.get('displayname', '')
+                        pwd_last_set = datetime.datetime.fromtimestamp(properties.get('pwdlastset', 0))
+                        enabled = bool(properties.get('enabled', True))
+
                         self.db.insert_or_update_credential(
                             domain=domain_id,
                             username=name,
@@ -1365,7 +1394,11 @@ class Bloodhound(CmdBase):
                             object_identifier=oid,
                             dn=dn,
                             ntlm_hash='',
-                            type='U')
+                            type='U',
+                            full_name=full_name,
+                            pwd_last_set=pwd_last_set,
+                            enabled=enabled
+                        )
 
                         self.db.insert_or_update_bloodhound_object(
                             label='User',

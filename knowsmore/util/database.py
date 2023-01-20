@@ -92,19 +92,24 @@ class Database(object):
         conn.commit()
 
     @connect
-    def insert_update_one(self, conn, table_name, **kwargs):
+    def insert_update_one(self, conn: str, table_name: str, **kwargs):
+        self.insert_update_one_exclude(table_name, [], **kwargs)
+
+    @connect
+    def insert_update_one_exclude(self, conn: str, table_name: str, exclude_on_update: list = [], **kwargs):
         table_name = self.scrub(table_name)
         (columns, values) = self.parse_args(kwargs)
         sql = "INSERT OR IGNORE INTO {} ({}) VALUES ({})" \
             .format(table_name, ','.join(columns), ', '.join(['?'] * len(columns)))
         c = conn.execute(sql, values)
 
-        # was inserted, no need to update
+        # No inserted, need to update
         if c.rowcount == 0:
             table_name = self.scrub(table_name)
             f_columns = self.constraints[table_name]
             f_values = tuple([kwargs.get(c, None) for c in f_columns],)
-            (u_columns, u_values) = self.parse_args(kwargs)
+            args = {k: v for k, v in kwargs.items() if k not in exclude_on_update}
+            (u_columns, u_values) = self.parse_args(args)
 
             sql = f"UPDATE {table_name} SET "
             sql += "{}".format(', '.join([f'{col} = ?' for col in u_columns]))
@@ -114,6 +119,7 @@ class Database(object):
             conn.commit()
 
         conn.commit()
+
 
     @connect
     def select(self, conn, table_name, **kwargs):
@@ -365,7 +371,9 @@ class Database(object):
                 groups TEXT NOT NULL DEFAULT(''),
                 password_id INTEGER NOT NULL,
                 user_data_similarity INTEGER NOT NULL DEFAULT(0),
-                insert_date datetime not null DEFAULT (datetime('now','localtime')),
+                enabled INTEGER NOT NULL DEFAULT(1),
+                pwd_last_set datetime NULL,
+                insert_date datetime NOT NULL DEFAULT (datetime('now','localtime')),
                 FOREIGN KEY(domain_id) REFERENCES domains(domain_id),
                 FOREIGN KEY(password_id) REFERENCES passwords(password_id),
                 UNIQUE(domain_id, name)
@@ -403,8 +411,10 @@ class Database(object):
         cursor.execute("""
                     CREATE TABLE IF NOT EXISTS [bloodhound_objects] (
                         object_id TEXT NOT NULL,
+                        r_id TEXT NOT NULL DEFAULT(''),
                         object_label TEXT NOT NULL,
                         filter_type TEXT NOT NULL DEFAULT('objectid'),
+                        name TEXT NOT NULL DEFAULT(''),
                         props TEXT NOT NULL DEFAULT(''),
                         insert_date datetime not null DEFAULT(strftime('%Y-%m-%d %H:%M:%f', 'NOW', 'localtime')),
                         updated_date datetime not null DEFAULT(strftime('%Y-%m-%d %H:%M:%f', 'NOW', 'localtime')),
@@ -415,15 +425,26 @@ class Database(object):
 
         conn.commit()
 
-        #cursor.execute("""
-        #            CREATE TRIGGER bloodhound_objects_insert_Trigger
-        #            AFTER INSERT ON bloodhound_objects
-        #            BEGIN
-        #               UPDATE bloodhound_objects SET insert_date = NEW.updated_date WHERE object_id = NEW.object_id;
-        #            END;
-        #        """)
+        cursor.execute("""
+                    CREATE INDEX idx_bloodhound_objects_id_label
+                    ON bloodhound_objects (object_id, object_label);
+                """)
 
-        #conn.commit()
+        conn.commit()
+
+        cursor.execute("""
+                    CREATE INDEX idx_bloodhound_objects_sync_date
+                    ON bloodhound_objects (sync_date);
+                """)
+
+        conn.commit()
+
+        cursor.execute("""
+                    CREATE INDEX idx_bloodhound_objects_sync_updated_date
+                    ON bloodhound_objects (sync_date, updated_date);
+                """)
+
+        conn.commit()
 
         cursor.execute("""
                     CREATE TABLE IF NOT EXISTS [bloodhound_edge] (
@@ -461,7 +482,7 @@ class Database(object):
 
         cursor.execute("""
                     CREATE INDEX idx_bloodhound_edge_sync_updated_date
-                    ON bloodhound_edge (sync_date, sync_date);
+                    ON bloodhound_edge (sync_date, updated_date);
                 """)
 
         conn.commit()

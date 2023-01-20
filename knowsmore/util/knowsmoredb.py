@@ -124,12 +124,26 @@ class KnowsMoreDB(Database):
                                password=password.clear_text,
                                )
 
-    def insert_or_update_bloodhound_object(self, label:str, object_id: str, filter_type: str = 'objectid',  **props):
+    def insert_or_update_bloodhound_object(self, label: str, object_id: str, filter_type: str = 'objectid',  **props):
+
+        object_id = object_id.upper()
+
+        name = props.get('name', '')
+        domain = props.get('domain', '').upper()
+        name = name.replace(f'@{domain}', '').replace(f'.{domain}', '')
+
+        rid = ''
+        if object_id[0:2] == "S-" and \
+                (label.lower() == 'group' or label.lower() == 'user' or label.lower() == 'machine'):
+            rid = object_id.split('-')[-1]
+
         self.insert_update_one(
             'bloodhound_objects',
             object_id=object_id,
             filter_type=filter_type,
             object_label=label,
+            name=name,
+            r_id=rid,
             props=json.dumps(props)
         )
 
@@ -158,7 +172,8 @@ class KnowsMoreDB(Database):
 
     def insert_or_update_credential(self, domain: int, username: str, ntlm_hash: str,
                                     dn: str = '', groups: str = '', object_identifier: str = '',
-                                    type: str = 'U'):
+                                    type: str = 'U', full_name: str = '', enabled: bool = True,
+                                    pwd_last_set: datetime.datetime = datetime.datetime(1970, 1, 1, 0, 0, 0, 0)):
         try:
 
             # Hard-coded empty password
@@ -179,39 +194,27 @@ class KnowsMoreDB(Database):
             if password_id == -1:
                 raise Exception('Password not found at database')
 
-            cred = self.select_first('credentials',
-                                     domain_id=domain,
-                                     name=username,
-                                     type=type
-                                     )
-            cred_id = -1 if cred is None else cred['credential_id']
+            data = {
+                'domain_id': domain,
+                'name': username,
+                'type': type,
+                'enabled': enabled,
+                'password_id': password_id
+            }
+            if full_name is not None:
+                data['full_name'] = full_name
+            if dn is not None:
+                data['dn'] = dn
+            if groups is not None:
+                data['groups'] = groups
+            if object_identifier is not None:
+                data['object_identifier'] = object_identifier
+            if pwd_last_set is not None and pwd_last_set.year > 1970:
+                data['pwd_last_set'] = pwd_last_set
 
-            if cred_id == -1:
-                self.insert_ignore_one('credentials',
-                                       domain_id=domain,
-                                       name=username,
-                                       password_id=password_id,
-                                       dn=dn if dn is not None else '',
-                                       object_identifier=object_identifier if object_identifier is not None else '',
-                                       groups=groups if groups is not None else '',
-                                       type=type
-                                       )
-            else:
-                data = {
-                    'domain_id': domain,
-                    'name': username,
-                    'type': type
-                }
-                if dn is not None:
-                    data['dn'] = dn
-                if groups is not None:
-                    data['groups'] = groups
-                if object_identifier is not None:
-                    data['object_identifier'] = object_identifier
-                if update_password:
-                    data['password_id'] = password_id
-
-                self.update('credentials', {'credential_id': cred_id}, **data)
+            self.insert_update_one_exclude('credentials',
+                                           exclude_on_update=['password_id'] if not update_password else [],
+                                           **data)
 
         except Exception as e:
             Color.pl('{!} {R}Error inserting credential data:{O} %s{W}' % str(e))
