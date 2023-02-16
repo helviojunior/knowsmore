@@ -91,7 +91,7 @@ jobs:
 
   publish:
     name: Publish on Test Environment
-    needs: build
+    needs: test
     runs-on: ubuntu-latest
     if:
       github.event_name == 'push' || github.event.pull_request.head.repo.full_name !=
