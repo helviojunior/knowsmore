@@ -2,6 +2,9 @@ import json
 import os
 import sqlite3
 import time
+import requests
+import socket
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
 from argparse import _ArgumentGroup, Namespace
 from pathlib import Path
 from binascii import hexlify
@@ -19,10 +22,13 @@ from knowsmore.util.database import Database
 from knowsmore.util.knowsmoredb import KnowsMoreDB
 from knowsmore.util.logger import Logger
 
+requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 class Splunk(CmdBase):
     db = None
     url_base = None
+    url_path = '/services/collector/event'
+    token_base = None
     cracked_only = False
     include_password = False
 
@@ -65,7 +71,17 @@ class Splunk(CmdBase):
 
             #Adicionar aqui o caminho padrão da API do Splunk
             self.url_base = f'{url.scheme}://{url.netloc}/'
+            self.token_base = args.txt_token
 
+            '''
+            Splunk check connection
+            '''
+            try:
+                socket.create_connection((url.hostname, url.port))
+                Logger.pl('     {C}splunk connection:{O} %s{W}' % url.hostname)
+            except Exception as e:
+                Color.pl('{!} {R}error: Splunk server not found {O}%s{R}{W}\r\n' % e) 
+                exit(1)
             # Passos s realizar aqui
             # 1 - Checar conexão com o Splunk
             # 2 - Outras checagens de segurança
@@ -114,10 +130,32 @@ class Splunk(CmdBase):
                         bar.expected_size = count
                     bar.show(count)
 
-                    # Integrate with Splunk Here
-                    txt_entry = json.dumps(entry)
-                    #print(txt_entry)
-                    #time.sleep(0.0300)
+                    '''
+                    Integration with Splunk
+                    '''
+                    url = self.url_base + self.url_path
+                    headers = {
+                            'Authorization': self.token_base,
+                            'Content-Type': 'application/json'
+                    }
+                    dict_payload = dict(event=entry)
+                    json_payload = json.dumps(dict_payload)
+                    try:
+                        response = requests.request("POST", url, headers=headers, data=json_payload, verify=False)
+                        response.raise_for_status()
+                    except requests.exceptions.HTTPError as error_http:
+                        Color.pl('{!} {R}error: HTTP Error {O}%s{R}{W}\r\n' % error_http)
+                        exit(1)
+                    except requests.exceptions.ConnectionError as error_connection:
+                        Color.pl('{!} {R}error: Connection Error {O}%s{R}{W}\r\n' % error_connection)
+                        exit(1)
+                    except requests.exceptions.Timeout as error_timeout:
+                        Color.pl('{!} {R}error: Timeout Error {O}%s{R}{W}\r\n' % error_timeout)
+                        exit(1)
+                    except requests.exceptions.RequestException as error_all:
+                        Color.pl('{!} {R}error: Generic Error {O}%s{R}{W}\r\n' % error_all)
+                        exit(1)
+                    time.sleep(0.0300)
 
             except KeyboardInterrupt as e:
                 raise e
