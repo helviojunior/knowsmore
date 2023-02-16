@@ -19,7 +19,7 @@ import os
 from setuptools import setup, find_packages
 
 requires = [
-    'requests>=2.28.0',
+    'requests>=2.27.1',
     'bs4>=0.0.1',
     'colorama',
     'clint>=0.5.1',
@@ -27,7 +27,7 @@ requires = [
     'Levenshtein>=0.20.9',
     'neo4j>=5.4.0',
     'impacket>=0.10.0',
-    'numpy>=1.24.1'
+    'numpy>=1.21.0'
 ]
 
 meta = {}
