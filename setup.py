@@ -18,23 +18,14 @@ git commit -m "Update build version"
 import os
 from setuptools import setup, find_packages
 
-requires = [
-    'requests>=2.27.1',
-    'bs4>=0.0.1',
-    'colorama',
-    'clint>=0.5.1',
-    'tabulate>=0.8.0',
-    'Levenshtein>=0.20.9',
-    'neo4j>=4.4.10',
-    'impacket>=0.10.0',
-    'numpy>=1.19.5'
-]
-
 meta = {}
 here = os.path.abspath(os.path.dirname(__file__))
 
 with open('knowsmore/__meta__.py') as f:
     exec(f.read(), meta)
+
+with open("requirements.txt", "r", encoding="utf-8") as f:
+    requires = f.read().replace('\r', '').replace('\n\n', '\n').split('\n')
 
 with open("README.md", "r", encoding="utf-8") as f:
     readme = f.read()
