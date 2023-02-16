@@ -80,7 +80,7 @@ jobs:
       - name: Run unit tests
         run: |
           rm -rf knowsmore.db
-          pytest tests/tests.py
+          pytest -s tests/tests.py
 
       - name: Build artifact
         run: |
