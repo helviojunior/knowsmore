@@ -27,7 +27,7 @@ requires = [
     'Levenshtein>=0.20.9',
     'neo4j>=4.4.10',
     'impacket>=0.10.0',
-    'numpy>=1.21.0'
+    'numpy>=1.19.5'
 ]
 
 meta = {}
