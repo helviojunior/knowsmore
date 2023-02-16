@@ -51,7 +51,7 @@ setup(
     packages=find_packages(),
     package_data={"": ["LICENSE"]},
     include_package_data=True,
-    python_requires=">=3.8, <4",
+    python_requires=">=3.6, <4",
     install_requires=requires,
     license=meta["__license__"],
     readme="README.md",
