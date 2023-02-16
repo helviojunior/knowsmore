@@ -23,7 +23,7 @@ requires = [
     'bs4>=0.0.1',
     'colorama',
     'clint>=0.5.1',
-    'tabulate>=0.9.0',
+    'tabulate>=0.8.0',
     'Levenshtein>=0.20.9',
     'neo4j>=5.4.0',
     'impacket>=0.10.0',
