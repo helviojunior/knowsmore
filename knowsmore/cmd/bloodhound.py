@@ -840,7 +840,7 @@ class Bloodhound(CmdBase):
                 if len(imported) > 0:
                     Color.pl('{W}{D}%s{W}' % Tools.get_tabulated(imported))
 
-    def parse_files(self, files: list[BloodhoundFile]):
+    def parse_files(self, files):
 
         unsupported = [
             f for f in files
@@ -888,7 +888,7 @@ class Bloodhound(CmdBase):
             if f.type == 'users'
         ], key=lambda x: (x.order, x.file_name), reverse=False))
 
-    def parse_computers_files(self, files: list[BloodhoundFile]):
+    def parse_computers_files(self, files):
 
         Color.pl('{?} {W}{D}importing computers...{W}')
 
@@ -947,7 +947,7 @@ class Bloodhound(CmdBase):
                 Tools.clear_line()
 
 
-    def parse_ou_files(self, files: list[BloodhoundFile]):
+    def parse_ou_files(self, files):
 
         Color.pl('{?} {W}{D}importing OU...{W}')
 
@@ -1043,7 +1043,7 @@ class Bloodhound(CmdBase):
                 bar.hide = True
                 Tools.clear_line()
 
-    def parse_gpo_files(self, files: list[BloodhoundFile]):
+    def parse_gpo_files(self, files):
 
         Color.pl('{?} {W}{D}importing GPO...{W}')
 
@@ -1080,7 +1080,7 @@ class Bloodhound(CmdBase):
                 bar.hide = True
                 Tools.clear_line()
 
-    def parse_domains_files(self, files: list[BloodhoundFile]):
+    def parse_domains_files(self, files):
 
         Color.pl('{?} {W}{D}importing domains...{W}')
 
@@ -1227,7 +1227,7 @@ class Bloodhound(CmdBase):
                 bar.hide = True
                 Tools.clear_line()
 
-    def parse_groups_file(self, files: list[BloodhoundFile]):
+    def parse_groups_file(self, files):
         groups = {}
 
         Color.pl('{?} {W}{D}importing groups...{W}')
@@ -1324,7 +1324,7 @@ class Bloodhound(CmdBase):
                     bar.hide = True
                     Tools.clear_line()
 
-    def parse_users_file(self, files: list[BloodhoundFile]):
+    def parse_users_file(self, files):
         Color.pl('{?} {W}{D}loading groups from db...{W}' + ' ' * 50)
         user_groups = {}
         groups = {}
