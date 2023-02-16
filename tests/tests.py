@@ -7,18 +7,20 @@ from knowsmore.knowsmore import KnowsMore
 from knowsmore.util.color import Color
 
 
-def create_db():
-    sys.argv = ['knowsmore', '--create-db']
+def test_create_db():
+    sys.argv = ['knowsmore', '-vvv', '--create-db']
     if sys.stdout.encoding is None:
         # Output is redirected to a file
         sys.stdout = codecs.getwriter('latin-1')(sys.stdout)
 
-    o = KnowsMore()
-    o.print_banner()
-
     try:
+        o = KnowsMore()
+        o.print_banner()
+
         o.main()
 
+        assert True
+        #sys.exit(0)
     except Exception as e:
         Color.pl('\n{!} {R}Error:{O} %s{W}' % str(e))
 
@@ -32,7 +34,5 @@ def create_db():
         Color.pl(err)
 
         Color.pl('\n{!} {R}Exiting{W}\n')
-        assert False
 
-    except KeyboardInterrupt:
-        Color.pl('\n{!} {O}interrupted, shutting down...{W}')
+        assert False
