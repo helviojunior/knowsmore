@@ -26,13 +26,14 @@ class Find(CmdBase):
     find_text = ''
     out_file = None
     cracked_only = False
+    json_format = False
     find_type = FindMode.All
 
     def __init__(self):
         super().__init__('find', 'Find an string (user, group, domain, password) at database')
 
     def add_flags(self, flags: _ArgumentGroup):
-        flags.add_argument('--save-to',
+        flags.add_argument('-o', '--save-to',
                            action='store',
                            default='',
                            dest=f'out_file',
@@ -44,6 +45,12 @@ class Find(CmdBase):
                            default=False,
                            dest=f'cracked_only',
                            help=Color.s('Find cracked data only'))
+
+        flags.add_argument('--json',
+                           action='store_true',
+                           default=False,
+                           dest=f'json_format',
+                           help=Color.s('Output in JSON format instead of text table'))
 
     def add_commands(self, cmds: _ArgumentGroup):
         cmds.add_argument('--text',
@@ -84,6 +91,7 @@ class Find(CmdBase):
 
         self.db = self.open_db(args)
         self.cracked_only = args.cracked_only
+        self.json_format = args.json_format
 
         Logger.pl('     {C}find mode:{O} %s{W}' % str(self.find_type.name))
         Logger.pl('     {C}find text:{O} %s{W}' % self.find_text)
@@ -158,12 +166,11 @@ class Find(CmdBase):
                 # register the new password
                 self.db.insert_password_manually(pwd)
 
-        if self.out_file is None:
+        if self.out_file is None and not self.json_format:
             print(Tools.get_tabulated(rows))
 
         else:
-            with open(self.out_file, "a", encoding="UTF-8") as text_file:
-                text_file.write(json.dumps(
+            dump = json.dumps(
                     {
                         'data': rows,
                         'meta': {
@@ -172,7 +179,13 @@ class Find(CmdBase):
                             'version': 1
                         }
                     }
-                ))
+                )
+
+            if self.out_file is not None:
+                with open(self.out_file, "a", encoding="UTF-8") as text_file:
+                    text_file.write(dump)
+            else:
+                print(dump)
 
         for k, v in news.items():
             Logger.pl('{+} {O}New password cracked! MTLM: {G}%s{O} Password: {G}%s{W}' % (k, v))
