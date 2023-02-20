@@ -1,3 +1,8 @@
+# BloodHound Sources
+#  https://github.com/BloodHoundAD/BloodHound/blob/master/src/js/newingestion.js
+#  https://github.com/BloodHoundAD/BloodHound/blob/master/src/js/utils.js
+#
+
 import datetime
 import errno
 import json
@@ -20,6 +25,7 @@ from neo4j import GraphDatabase, exceptions, Session, Transaction
 from neo4j.exceptions import ClientError
 
 from knowsmore.cmdbase import CmdBase
+from knowsmore.config import Configuration
 from knowsmore.libs.bloodhoundsync import BloodhoundSync
 from knowsmore.password import Password
 from knowsmore.util.color import Color
@@ -71,6 +77,10 @@ class Bloodhound(CmdBase):
                 elif self.type == "users":
                     self.order = 4
 
+                if Configuration.verbose >= 2:
+                    Color.pl('{*} {W}{D}%s: type {G}%s{W}{D}, version {G}%d{W}' % (
+                        self.file_name, self.type, self.version))
+
             except KeyboardInterrupt as e:
                 raise e
             except:
@@ -117,7 +127,6 @@ class Bloodhound(CmdBase):
 
         def __str__(self):
             return f"{self.name} {self.edition} v{self.major}.{self.minor}.{self.release}"
-
 
     class BloodHoundConnection:
 
