@@ -55,6 +55,7 @@ def test_wordlist():
         max = 512 * 1024  # 1 GB
         if estimated_size > max:
             wlc.small = True
+            estimated_size = wlc.calculate()
             Color.pl('{*} {W}Estimated bytes:{O} %s{W}' % Tools.sizeof_fmt(estimated_size, start_unit='K'))
 
         temp = [w for w in wlc.generate(wlc.name, 0)]
