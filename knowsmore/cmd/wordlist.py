@@ -27,6 +27,7 @@ from knowsmore.util.tools import Tools
 
 LEETS1 = {"a": "aA@49\u00e1\u00c1\u00e0\u00c0\u00c2\u00c3\u00c4\u00c5\u00e2\u00e3\u00e4\u00e5", "b": "bB8", "c": "cC\u00e7\u00c7", "d": "dD", "e": "eE32\u00c8\u00c9\u00ca\u00cb\u00e8\u00e9\u00ea\u00eb", "f": "fF", "g": "gG96", "h": "hH#", "i": "iI!1\u00cc\u00cd\u00ce\u00cf\u00ec\u00ed\u00ee\u00ef", "j": "jJ", "k": "kK", "l": "lL!1", "m": "mM", "n": "nN\u00f1\u00d1", "o": "oO04\u00d2\u00d3\u00d4\u00d5\u00d6\u00f2\u00f3\u00f4\u00f5\u00f6", "p": "pP", "q": "qQ", "r": "rR", "s": "sS5$", "t": "tT7+", "u": "uU\u00d9\u00da\u00db\u00dc\u00f9\u00fa\u00fb\u00fc", "v": "vV", "w": "wW", "x": "xX", "y": "yY\u00dd\u00fd", "z": "zZ2", "0": "0", "1": "1", "2": "2", "3": "3", "4": "4", "5": "5", "6": "6", "7": "7", "8": "8", "9": "9"}
 LEETS2 = {"a":"a","b":"b","c":"c","d":"d","e":"e","f":"f","g":"g","h":"h","i":"i","j":"j","k":"k","l":"l","m":"m","n":"n","o":"o","p":"p","q":"q","r":"r","s":"s","t":"t","u":"u","v":"v","w":"w","x":"x","y":"y","z":"z","A":"A","B":"B","C":"C","D":"D","E":"E","F":"F","G":"G","H":"H","I":"I","J":"J","K":"K","L":"L","M":"M","N":"N","O":"O","P":"P","Q":"Q","R":"R","S":"S","T":"T","U":"U","V":"V","W":"W","X":"X","Y":"Y","Z":"Z","0":"0","1":"1","2":"2","3":"3","4":"4","5":"5","6":"6","7":"7","8":"8","9":"9"}
+LEETS3 = {"a": "aA@4", "b": "bB8", "c": "cC", "d": "dD", "e": "eE3", "f": "fF", "g": "gG96", "h": "hH#", "i": "iI!1", "j": "jJ", "k": "kK", "l": "lL!1", "m": "mM", "n": "nN", "o": "oO0", "p": "pP", "q": "qQ", "r": "rR", "s": "sS5$", "t": "tT7+", "u": "uU", "v": "vV", "w": "wW", "x": "xX", "y": "yY", "z": "zZ2", "0": "0", "1": "1", "2": "2", "3": "3", "4": "4", "5": "5", "6": "6", "7": "7", "8": "8", "9": "9"}
 SPECIAL = ["@", "#", "!", ".", "-", ",", "$", "%", "*", "+", "/", "\\", "<", ">", "=", "&"]
 COMMON = ["123", "1234", "12345", "123456"]
 
@@ -37,6 +38,7 @@ class WordList(CmdBase):
     max_size = 32
     padding = False
     no_leets = False
+    small = False
     unique_chars = []
     unique_ch_b = 0
     char_space = LEETS1
@@ -94,18 +96,11 @@ class WordList(CmdBase):
         self.no_leets = args.no_leets
         self.batch = args.batch
         self.append_file = args.append_file
+        self.filename = args.out_file
 
-        if self.min_size < 1:
-            self.min_size = 1
-
-        if self.no_leets:
-            self.char_space = LEETS2
-
-        self.unique_chars = set([v for l1 in [list(value) for value in self.char_space.values()] for v in l1])
-        self.unique_ch_b = int(np.sum([len(v.encode("UTF-8")) for v in self.unique_chars]))
 
         try:
-            with open(args.out_file, 'a', encoding="UTF-8") as f:
+            with open(self.filename, 'a', encoding="UTF-8") as f:
                 pass
         except IOError as x:
             if x.errno == errno.EACCES:
@@ -118,12 +113,25 @@ class WordList(CmdBase):
                 Logger.pl('{!} {R}error: could not open NTLM hashes file {W}\r\n')
                 Tools.exit_gracefully(1)
 
-        self.filename = args.out_file
-
         # Database not yet needed
         #self.db = self.open_db(args)
 
+        self.setup()
+
         return True
+
+    def setup(self):
+
+        if self.min_size < 1:
+            self.min_size = 1
+
+        if self.no_leets:
+            self.char_space = LEETS2
+        elif self.small:
+            self.char_space = LEETS3
+
+        self.unique_chars = set([v for l1 in [list(value) for value in self.char_space.values()] for v in l1])
+        self.unique_ch_b = int(np.sum([len(v.encode("UTF-8")) for v in self.unique_chars]))
 
     def run(self):
 
@@ -256,8 +264,9 @@ class WordList(CmdBase):
                     if self.min_size <= len(word) + 1 + len(c) <= self.max_size:
                         yield "%s%s%s" % (word, s, c)
                         yield "%s%s%s" % (c, s, word)
-                        yield "%s%s%s" % (word, c, s)
-                        yield "%s%s%s" % (s, c, word)
+                        if not self.small:
+                            yield "%s%s%s" % (word, c, s)
+                            yield "%s%s%s" % (s, c, word)
 
         if self.min_size <= len(word) + 3 <= self.max_size:
             for n in range(0, y2 + 15):
@@ -265,13 +274,15 @@ class WordList(CmdBase):
                 yield "%s%s" % (n, word)
                 for s in SPECIAL:
                     yield "%s%s%s" % (word, s, n)
-                    yield "%s%s%s" % (word, n, s)
                     yield "%s%s%s" % (n, s, word)
-                    yield "%s%s%s" % (s, n, word)
                     yield "%s%s%02d" % (word, s, n)
-                    yield "%s%02d%s" % (word, n, s)
                     yield "%02d%s%s" % (n, s, word)
-                    yield "%s%02d%s" % (s, n, word)
+
+                    if not self.small:
+                        yield "%s%s%s" % (word, n, s)
+                        yield "%s%s%s" % (s, n, word)
+                        yield "%s%02d%s" % (word, n, s)
+                        yield "%s%02d%s" % (s, n, word)
 
         if self.min_size <= len(word) + 5 <= self.max_size:
             for n in range(year - 15, year + 15):
@@ -279,13 +290,15 @@ class WordList(CmdBase):
                 yield "%s%s" % (n, word)
                 for s in SPECIAL:
                     yield "%s%s%s" % (word, s, n)
-                    yield "%s%s%s" % (word, n, s)
                     yield "%s%s%s" % (n, s, word)
-                    yield "%s%s%s" % (s, n, word)
                     yield "%s%s%04d" % (word, s, n)
-                    yield "%s%04d%s" % (word, n, s)
                     yield "%04d%s%s" % (n, s, word)
-                    yield "%s%04d%s" % (s, n, word)
+
+                    if not self.small:
+                        yield "%s%s%s" % (word, n, s)
+                        yield "%s%s%s" % (s, n, word)
+                        yield "%s%04d%s" % (word, n, s)
+                        yield "%s%04d%s" % (s, n, word)
 
     def permutation(self, char_space: list, size: int) -> list:
         if size <= 0:
