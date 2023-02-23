@@ -26,7 +26,7 @@ here = os.path.abspath(os.path.dirname(__file__))
 with open(f"{here}/knowsmore/__meta__.py") as f:
     exec(f.read(), meta)
 
-with open(f"{here}/requirements.txt", "r", encoding="utf-8") as f:
+with open(f"{here}/requirements/requirements.txt", "r", encoding="utf-8") as f:
     requires = f.read().splitlines()
     if not requires:
         print("Unable to read requirements from the requirements.txt file"
