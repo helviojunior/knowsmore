@@ -36,6 +36,7 @@ class WordList(CmdBase):
     name = ''
     min_size = 1
     max_size = 32
+    level = 3
     padding = False
     no_leets = False
     small = False
@@ -77,6 +78,8 @@ class WordList(CmdBase):
                           help='Add padding to fill string to match minimun leght')
         cmds.add_argument('-nol', '--no-leets', action='store_true', dest='no_leets', default=False,
                           help='No Leets')
+        cmds.add_argument('-l', '--level', default=3, type=int, dest='level',
+                          help='Level of used characters. (default: 3)')
 
     def load_from_arguments(self, args: Namespace) -> bool:
 
@@ -97,7 +100,10 @@ class WordList(CmdBase):
         self.batch = args.batch
         self.append_file = args.append_file
         self.filename = args.out_file
+        self.level = args.level
 
+        if self.level <= 2:
+            self.no_leets = True
 
         try:
             with open(self.filename, 'a', encoding="UTF-8") as f:
@@ -127,7 +133,7 @@ class WordList(CmdBase):
 
         if self.no_leets:
             self.char_space = LEETS2
-        elif self.small:
+        elif self.small or self.level == 2:
             self.char_space = LEETS3
 
         self.unique_chars = set([v for l1 in [list(value) for value in self.char_space.values()] for v in l1])
@@ -264,7 +270,7 @@ class WordList(CmdBase):
                     if self.min_size <= len(word) + 1 + len(c) <= self.max_size:
                         yield "%s%s%s" % (word, s, c)
                         yield "%s%s%s" % (c, s, word)
-                        if not self.small:
+                        if not self.small and self.level >= 2:
                             yield "%s%s%s" % (word, c, s)
                             yield "%s%s%s" % (s, c, word)
 
@@ -278,7 +284,7 @@ class WordList(CmdBase):
                     yield "%s%s%02d" % (word, s, n)
                     yield "%02d%s%s" % (n, s, word)
 
-                    if not self.small:
+                    if not self.small and self.level >= 3:
                         yield "%s%s%s" % (word, n, s)
                         yield "%s%s%s" % (s, n, word)
                         yield "%s%02d%s" % (word, n, s)
@@ -294,7 +300,7 @@ class WordList(CmdBase):
                     yield "%s%s%04d" % (word, s, n)
                     yield "%04d%s%s" % (n, s, word)
 
-                    if not self.small:
+                    if not self.small and self.level >= 3:
                         yield "%s%s%s" % (word, n, s)
                         yield "%s%s%s" % (s, n, word)
                         yield "%s%04d%s" % (word, n, s)
