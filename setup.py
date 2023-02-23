@@ -37,6 +37,8 @@ with open("requirements.txt", "r", encoding="utf-8") as f:
 with open("README.md", "r", encoding="utf-8") as f:
     readme = f.read()
 
+#If you use both include_package_data and package_data, files specified with package_data will not be automatically included in sdists; you must instead list them in your MANIFEST.in
+
 setup(
     name=meta["__title__"],
     version=meta["__version__"],
@@ -48,7 +50,7 @@ setup(
     url=meta["__url__"],
     packages=find_packages(),
     package_data={"": ["LICENSE", "requirements.txt"]},
-    include_package_data=False,
+    #include_package_data=True,
     python_requires=">=3.6, <4",
     install_requires=requires,
     license=meta["__license__"],
