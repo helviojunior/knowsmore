@@ -23,18 +23,17 @@ from setuptools import setup, find_packages
 meta = {}
 here = os.path.abspath(os.path.dirname(__file__))
 
-with open('knowsmore/__meta__.py') as f:
+with open(f"{here}/knowsmore/__meta__.py") as f:
     exec(f.read(), meta)
 
-with open("requirements.txt", "r", encoding="utf-8") as f:
+with open(f"{here}/requirements.txt", "r", encoding="utf-8") as f:
     requires = f.read().splitlines()
     if not requires:
         print("Unable to read requirements from the requirements.txt file"
               "That indicates this copy of the source code is incomplete.")
         sys.exit(2)
 
-
-with open("README.md", "r", encoding="utf-8") as f:
+with open(f"{here}/README.md", "r", encoding="utf-8") as f:
     readme = f.read()
 
 #If you use both include_package_data and package_data, files specified with package_data will not be automatically included in sdists; you must instead list them in your MANIFEST.in
