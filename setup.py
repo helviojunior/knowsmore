@@ -48,7 +48,7 @@ setup(
     author_email=meta["__author_email__"],
     url=meta["__url__"],
     packages=find_packages(),
-    package_data={"": ["LICENSE", "requirements.txt"]},
+    package_data={"": ["LICENSE", "requirements/*.txt"]},
     #include_package_data=True,
     python_requires=">=3.6, <4",
     install_requires=requires,
