@@ -48,7 +48,7 @@ setup(
     url=meta["__url__"],
     packages=find_packages(),
     package_data={"": ["LICENSE", "requirements.txt"]},
-    include_package_data=True,
+    include_package_data=False,
     python_requires=">=3.6, <4",
     install_requires=requires,
     license=meta["__license__"],
