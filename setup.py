@@ -26,7 +26,7 @@ here = os.path.abspath(os.path.dirname(__file__))
 with open(f"{here}/knowsmore/__meta__.py") as f:
     exec(f.read(), meta)
 
-with open(f"{here}/requirements/requirements.txt", "r", encoding="utf-8") as f:
+with open(f"{here}/requirements.txt", "r", encoding="utf-8") as f:
     requires = f.read().splitlines()
     if not requires:
         print("Unable to read requirements from the requirements.txt file"
@@ -48,7 +48,8 @@ setup(
     author_email=meta["__author_email__"],
     url=meta["__url__"],
     packages=find_packages(),
-    package_data={"": ["LICENSE", "requirements/*.txt"]},
+    package_data={"": ["LICENSE"]},
+    data_files=[('', ['requirements.txt'])],
     #include_package_data=True,
     python_requires=">=3.6, <4",
     install_requires=requires,
