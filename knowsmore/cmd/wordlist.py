@@ -102,9 +102,6 @@ class WordList(CmdBase):
         self.filename = args.out_file
         self.level = args.level
 
-        if self.level <= 2:
-            self.no_leets = True
-
         try:
             with open(self.filename, 'a', encoding="UTF-8") as f:
                 pass
@@ -127,6 +124,12 @@ class WordList(CmdBase):
         return True
 
     def setup(self):
+
+        if self.level < 1:
+            self.level = 1
+
+        if self.level == 1:
+            self.no_leets = True
 
         if self.min_size < 1:
             self.min_size = 1
