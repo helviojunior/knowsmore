@@ -332,7 +332,7 @@ class NTLMHash(CmdBase):
 
                                 if len(Configuration.company) > 0:
                                     pdata['company_similarity'] = sorted(
-                                        [password.calc_ratio(n1) for n1 in Configuration.company]
+                                        [password.calc_ratio(n1, 0.40) for n1 in Configuration.company]
                                     )[-1]
 
                                 self.db.update_password(
@@ -419,7 +419,7 @@ class NTLMHash(CmdBase):
 
                                 if len(Configuration.company) > 0:
                                     pdata['company_similarity'] = sorted(
-                                        [password.calc_ratio(n1) for n1 in Configuration.company]
+                                        [password.calc_ratio(n1, 0.4) for n1 in Configuration.company]
                                     )[-1]
 
                                 self.db.update_password(

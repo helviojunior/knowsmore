@@ -192,6 +192,9 @@ class Password(object):
             [round(ratio(l1, str_pass, score_cutoff=score_cutoff) * float(100)) for l1 in Password.leets_cache[name]]
         )[-1]
 
+        if self.similarity < int(score_cutoff * float(100)):
+            self.similarity = 0
+
         return self.similarity
 
     def __str__(self):

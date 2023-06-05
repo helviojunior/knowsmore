@@ -155,7 +155,7 @@ class Stats(CmdBase):
                 'from credentials as c '
                 'inner join passwords as p '
                 'on c.password_id = p.password_id '
-                'where p.length > 0 and p.company_similarity > 0 '
+                'where p.length > 0 and p.company_similarity > 40 '
                 'and p.company_similarity >= (select ifnull(avg(p1.company_similarity),0) as v1 from passwords as p1 where p1.company_similarity > 0) '
                 'group by p.password, p.company_similarity '
                 'order by score desc '
