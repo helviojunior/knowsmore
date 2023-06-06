@@ -4,6 +4,8 @@ import sqlite3
 import time
 from argparse import _ArgumentGroup, Namespace
 from pathlib import Path
+
+from ansi2image.ansi2image import Ansi2Image
 from binascii import hexlify
 from enum import Enum
 
@@ -20,6 +22,7 @@ from knowsmore.util.logger import Logger
 class Stats(CmdBase):
     db = None
     out_file = None
+    out_path = None
 
     def __init__(self):
         super().__init__('stats', 'Generate password and hashes statistics')
@@ -31,6 +34,13 @@ class Stats(CmdBase):
                            dest=f'out_file',
                            help=Color.s(
                                'Output file to save JSON data'))
+
+        flags.add_argument('--save-to-img',
+                           action='store',
+                           default='',
+                           dest=f'out_path',
+                           help=Color.s(
+                               'Output path to save PNG files'))
 
     def add_commands(self, cmds: _ArgumentGroup):
         pass
@@ -44,6 +54,15 @@ class Stats(CmdBase):
             if os.path.exists(self.out_file):
                 Logger.pl('{!} {R}error: out file ({O}%s{R}) already exists {W}\r\n' % (
                     self.out_file))
+                exit(1)
+
+        if args.out_path is not None and args.out_path.strip() != '':
+            self.out_path = Path(args.out_path).absolute()
+
+        if self.out_path is not None:
+            if not os.path.isdir(self.out_path):
+                Logger.pl('{!} {R}error: output path ({O}%s{R}) does not exists {W}\r\n' % (
+                    self.out_path))
                 exit(1)
 
         self.db = self.open_db(args)
@@ -215,14 +234,9 @@ class Stats(CmdBase):
                     'rows': rows
                 })
 
-        if self.out_file is None:
+        if self.out_file is not None:
+            Color.pl('{?} {W}{D}Statistics saved at {W}{C}%s{W}{D}{W}' % self.out_file)
 
-            for d in data:
-                Color.pl('{?} {W}{D}%s{W}' % d['description'])
-                print(Tools.get_tabulated(d['rows']))
-                print(' ')
-
-        else:
             with open(self.out_file, "a", encoding="UTF-8") as text_file:
                 text_file.write(json.dumps(
                     {
@@ -234,6 +248,42 @@ class Stats(CmdBase):
                         }
                     }
                 ))
+
+        elif self.out_path is not None:
+
+            for i, d in enumerate(data):
+                name = f"{i:03}_{Tools.sanitize_filename(d['description'])}"
+                file_data = ' \033[38;5;52m=\033[38;5;88m=\033[38;5;124m=\033[38;5;160m=\033[38;5;196m> ' + Color.s(
+                    '{W}{G}%s{W}\n' % d['description'])
+
+                file_data += ''.join([
+                    '%s─' % c for k, c in sorted(Color.gray_scale.items(), key=lambda x: x[0], reverse=True)
+                ]) + Color.s('{W}\n')
+
+                Color.pl('{?} {W}{D}Saving %s...{W}' % d['description'])
+
+                if len(data) == 0:
+                    file_data += Color.s(
+                        '\n  {R}ATTENTION!!!{O} \n  %s{W}\n' % 'Table is empty')
+                else:
+                    file_data += Tools.get_ansi_tabulated(d['rows'])
+
+                o = Ansi2Image(0, 0, font_name=Ansi2Image.get_default_font_name(), font_size=13)
+                o.loads(file_data)
+                o.min_margin = 10
+                o.max_margin = 30
+                o.calc_size(margin=0.01)
+                o.save_image(os.path.join(self.out_path, f'{name}.png'), format='PNG')
+
+                #with open(os.path.join(self.out_path, f'{name}.ansi.txt'), 'wb') as f:
+                #    f.write(file_data.encode('utf-8', 'ignore'))
+
+        else:
+
+            for d in data:
+                Color.pl('{?} {W}{D}%s{W}' % d['description'])
+                print(Tools.get_tabulated(d['rows']))
+                print(' ')
 
 
 

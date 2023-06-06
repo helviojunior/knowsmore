@@ -4,10 +4,14 @@
 import sys
 import colorama
 from colorama import Fore, Back, Style
-colorama.init()
+colorama.init(strip=False)
+
 
 class Color(object):
     ''' Helper object for easily printing colored text to the terminal. '''
+
+    _stdout = None
+    _stderr = None
 
     # Basic console colors
     colors = {
@@ -18,21 +22,32 @@ class Color(object):
         'B' : '\033[34m', # blue
         'P' : '\033[35m', # purple
         'C' : '\033[36m', # cyan
-        'GR': '\033[37m', # gray
+        'GR': '\033[38;5;240m', # gray
+        'GR2': '\033[38;5;235m',  # gray
         'D' : '\033[2m'   # dims current color. {W} resets.
     }
 
     # Helper string replacements
     replacements = {
-        '{+}': ' {W}{D}[{W}{G}+{W}{D}]{W}',
-        '{!}': ' {O}[{R}!{O}]{W}',
-        '{?}': ' {W}{D}[{W}{C}?{W}{D}]{W}',
-        '{*}': ' {W}[{B}*{W}]'
+        '{+}': '{W}{D}[{W}{G}+{W}{D}]{W}',
+        '{!}': '{O}[{R}!{O}]{W}',
+        '{?}': '{W}{D}[{W}{C}?{W}{D}]{W}',
+        '{*}': '{W}[{B}*{W}]'
     }
 
-
+    gray_scale = {
+        i: f'\033[38;5;{i}m' for i in range(232, 256)
+    }
 
     last_sameline_length = 0
+
+    @staticmethod
+    def get_system_defaults():
+        if Color._stdout is None:
+            Color._stdout = sys.stdout
+
+        if Color._stderr is None:
+            Color._stderr = sys.stderr
 
     @staticmethod
     def p(text):
@@ -41,8 +56,8 @@ class Color(object):
         Example:
             Color.p("{R}This text is red. {W} This text is white")
         '''
-        sys.stdout.write(Color.s(text))
-        sys.stdout.flush()
+        Color._stdout.write(Color.s(text))
+        Color._stdout.flush()
         if '\r' in text:
             text = text[text.rfind('\r')+1:]
             Color.last_sameline_length = len(text)
@@ -58,7 +73,7 @@ class Color(object):
     @staticmethod
     def pe(text):
         '''Prints text using colored format with leading and trailing new line to STDERR.'''
-        sys.stderr.write(Color.s('%s\n' % text))
+        Color._stderr.write(Color.s('%s\n' % text))
         Color.last_sameline_length = 0
 
     @staticmethod
@@ -91,7 +106,10 @@ class Color(object):
     @staticmethod
     def clear_entire_line():
         import os
-        (rows, columns) = os.popen('stty size', 'r').read().split()
+        try:
+            (_, columns) = os.popen('stty size', 'r').read().split()
+        except:
+            columns = 150
         Color.p("\r" + (" " * int(columns)) + "\r")
 
     @staticmethod
@@ -106,8 +124,5 @@ class Color(object):
         Color.p("\r{+} {G}%s{W} ({C}%sdb{W}) {G}%s {C}%s{W}: %s " % (
             essid, target.power, attack_type, attack_name, progress))
 
-if __name__ == '__main__':
-    Color.pl("{R}Testing{G}One{C}Two{P}Three{W}Done")
-    print(Color.s("{C}Testing{P}String{W}"))
-    Color.pl("{+} Good line")
-    Color.pl("{!} Danger")
+
+Color.get_system_defaults()

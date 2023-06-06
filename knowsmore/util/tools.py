@@ -3,10 +3,15 @@
 import os
 import string, random, sys, re
 import unicodedata
-from tabulate import _table_formats, tabulate
+from ansi2image.ansi2image import Ansi2Image
+from tabulate import _table_formats, tabulate, TableFormat, Line, DataRow
 
 from knowsmore.util.color import Color
 
+_texts = {
+    'qty': 'Quantity',
+    'company_similarity': 'Company Similarity'
+}
 
 class Tools:
 
@@ -29,6 +34,33 @@ class Tools:
 
         print((" " * size), end='\r', flush=True)
         print((" " * size), file=sys.stderr, end='\r', flush=True)
+
+    @staticmethod
+    def permited_char_filename(s):
+        if s.isalpha():
+            return True
+        elif bool(re.match("^[A-Za-z0-9]*$", s)):
+            return True
+        elif s == "-":
+            return True
+        elif s == "_":
+            return True
+        elif s == ".":
+            return True
+        else:
+            return False
+
+    @staticmethod
+    def sanitize_filename(name):
+        if name is None:
+          return ''
+        name = Tools.strip_accents(name.strip())
+        while ('  ' in name):
+            name = name.replace('  ', ' ')
+        name = name.replace(' ', '-')
+        while ('--' in name):
+            name = name.replace('--', '-')
+        return ''.join(filter(Tools.permited_char_filename, name))
 
     @staticmethod     
     def permited_char(s):
@@ -92,6 +124,37 @@ class Tools:
         data = [item.values() for item in data]
 
         return tabulate(data, headers, tablefmt='psql')
+
+    @staticmethod
+    def get_ansi_tabulated(data: list) -> str:
+
+        if len(data) == 0:
+            return ''
+
+        _table_formats["ccat"] = TableFormat(
+            lineabove=None,
+            linebelowheader=Line("", Color.s("{GR}─{W}"), Color.s("{GR}┼{W}"), ""),
+            linebetweenrows=None,
+            linebelow=None,
+            headerrow=DataRow("", Color.s("{GR}│{W}"), ""),
+            datarow=DataRow(Color.s("{W}{O}{D}"), Color.s("{W}{GR}│{W}"), ""),
+            padding=1,
+            with_header_hide=None,
+        )
+
+        headers = [(Tools.format_text_header(h) if len(h) > 2 and h[0:2] != '__' else ' ') for h in data[0].keys()]
+        data = [item.values() for item in data]
+
+        tmp_data = tabulate(data, headers, tablefmt='ccat')
+
+        return tmp_data
+
+    @staticmethod
+    def format_text_header(text) -> str:
+        if text in _texts.keys():
+            return _texts[text]
+
+        return text.capitalize()
 
     @staticmethod
     def sizeof_fmt(num, suffix="B", start_unit=""):
