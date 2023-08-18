@@ -24,6 +24,7 @@ from knowsmore.util.logger import Logger
 
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
+
 class Splunk(CmdBase):
     db = None
     url_base = None

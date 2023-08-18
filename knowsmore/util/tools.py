@@ -167,3 +167,21 @@ class Tools:
                 num /= 1024.0
         return f"{num:.1f} Y{suffix}"
 
+    @staticmethod
+    def get_dict_value(data: dict, key: str, default=None):
+        if data is None:
+            return default
+
+        #if not isinstance(data, dict):
+        #    return
+
+        # Return if matches
+        if key in data:
+            return data.get(key, default)
+
+        # Try to locate with the key in lowercase
+        return next(
+            iter([
+                v for k, v in data.items()
+                if k.strip().lower() == key
+            ]), default)

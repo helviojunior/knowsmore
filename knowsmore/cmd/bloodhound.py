@@ -23,6 +23,8 @@ from argparse import _ArgumentGroup, Namespace
 from clint.textui import progress
 from neo4j import GraphDatabase, exceptions, Session, Transaction
 from neo4j.exceptions import ClientError
+from neo4j.meta import ExperimentalWarning
+import warnings
 
 from knowsmore.cmdbase import CmdBase
 from knowsmore.config import Configuration
@@ -32,6 +34,8 @@ from knowsmore.util.color import Color
 from knowsmore.util.database import Database
 from knowsmore.util.logger import Logger
 from knowsmore.util.tools import Tools
+
+warnings.filterwarnings("ignore", category=ExperimentalWarning)
 
 
 class Bloodhound(CmdBase):
@@ -132,6 +136,7 @@ class Bloodhound(CmdBase):
 
         database = None
         version = None
+        groups = {}
 
         def __init__(self, uri, user, password, database):
             self.driver = GraphDatabase.driver(uri, auth=(user, password))
@@ -149,6 +154,7 @@ class Bloodhound(CmdBase):
                 raise e
 
             self.database = database
+            self.groups = {}
 
         def close(self):
             self.driver.close()
@@ -241,11 +247,15 @@ class Bloodhound(CmdBase):
                     try:
                         if self.version.major >= 5:
                             query = f"CREATE CONSTRAINT {constraint['name']} IF NOT EXISTS FOR (b:{label}) REQUIRE b.{constraint['property']} IS UNIQUE"
+
+                            with self.driver.session(database=self.database) as session:
+                                session.execute_write(self.execute, query)
+
                         else:
                             query = f"CREATE CONSTRAINT {constraint['name']} IF NOT EXISTS ON (b:{label}) ASSERT b.{constraint['property']} IS UNIQUE"
 
-                        with self.driver.session(database=self.database) as session:
-                            session.execute_write(self.execute, query)
+                            with self.driver.session(database=self.database) as session:
+                                session.write_transaction(self.execute, query)
 
                     except Exception as e:
                         #print(e)
@@ -261,20 +271,28 @@ class Bloodhound(CmdBase):
                     try:
                         if self.version.major >= 5:
                             query = f"CREATE INDEX {index['name']} IF NOT EXISTS FOR (b:{label}) ON (b.{index['property']})"
+
+                            with self.driver.session(database=self.database) as session:
+                                session.execute_write(self.execute, query, **props)
                         else:
                             query = "CALL db.createIndex($name, $label, $properties, $provider)"
 
+                            with self.driver.session(database=self.database) as session:
+                                session.write_transaction(self.execute, query)
+
                         #print(query)
-                        with self.driver.session(database=self.database) as session:
-                            session.execute_write(self.execute, query, **props)
 
                     except Exception as e:
                         #print(e)
                         pass
 
         def get_version(self) -> list:
-            with self.driver.session(database=self.database) as session:
-                return session.execute_read(self._get_version)
+            try:
+                with self.driver.session(database=self.database) as session:
+                    return session.execute_read(self._get_version)
+            except:
+                with self.driver.session(database=self.database) as session:
+                    return session.read_transaction(self._get_version)
 
         @staticmethod
         def _get_version(tx: Transaction):
@@ -841,53 +859,55 @@ class Bloodhound(CmdBase):
                 Color.pl('{W}{D}%s{W}' % Tools.get_tabulated(imported))
 
 
-def parse_files(self, files):
+    def parse_files(self, files):
 
-    unsupported = [
-        f for f in files
-        if f.version != 4 and f.version != 5
-    ]
-    if len(unsupported) > 0:
-        Logger.pl('{!} {R}error: Unsupported BloodHound Version:{W}')
-        for f in unsupported:
-            Color.pl('{!} {W}{D}%s: {G}v%d{W}' % (f.file_name, f.version))
-        Tools.exit_gracefully(1)
+        unsupported = [
+            f for f in files
+            if f.version != 4 and f.version != 5
+        ]
+        if len(unsupported) > 0:
+            Logger.pl('{!} {R}error: Unsupported BloodHound Version:{W}')
+            for f in unsupported:
+                Color.pl('{!} {W}{D}%s: {G}v%d{W}' % (f.file_name, f.version))
+            Tools.exit_gracefully(1)
 
-    # Domains
-    self.parse_domains_files(sorted([
-        f for f in files
-        if f.type == 'domains'
-    ], key=lambda x: (x.order, x.file_name), reverse=False))
+        self.groups = {}
 
-    # GPO
-    self.parse_gpo_files(sorted([
-        f for f in files
-        if f.type == 'gpos'
-    ], key=lambda x: (x.order, x.file_name), reverse=False))
+        # Domains
+        self.parse_domains_files(sorted([
+            f for f in files
+            if f.type == 'domains'
+        ], key=lambda x: (x.order, x.file_name), reverse=False))
 
-    # OU
-    self.parse_ou_files(sorted([
-        f for f in files
-        if f.type == 'ous'
-    ], key=lambda x: (x.order, x.file_name), reverse=False))
+        # GPO
+        self.parse_gpo_files(sorted([
+            f for f in files
+            if f.type == 'gpos'
+        ], key=lambda x: (x.order, x.file_name), reverse=False))
 
-    # Groups
-    self.parse_groups_file(sorted([
-        f for f in files
-        if f.type == 'groups'
-    ], key=lambda x: (x.order, x.file_name), reverse=False))
+        # OU
+        self.parse_ou_files(sorted([
+            f for f in files
+            if f.type == 'ous'
+        ], key=lambda x: (x.order, x.file_name), reverse=False))
 
-    # Computers
-    self.parse_computers_files(sorted([
-        f for f in files
-        if f.type == 'computers'
-    ], key=lambda x: (x.order, x.file_name), reverse=False))
+        # Groups
+        self.parse_groups_file(sorted([
+            f for f in files
+            if f.type == 'groups'
+        ], key=lambda x: (x.order, x.file_name), reverse=False))
 
-    # Users
-    self.parse_users_file(sorted([
-        f for f in files
-        if f.type == 'users'
-    ], key=lambda x: (x.order, x.file_name), reverse=False))
+        # Computers
+        self.parse_computers_files(sorted([
+            f for f in files
+            if f.type == 'computers'
+        ], key=lambda x: (x.order, x.file_name), reverse=False))
+
+        # Users
+        self.parse_users_file(sorted([
+            f for f in files
+            if f.type == 'users'
+        ], key=lambda x: (x.order, x.file_name), reverse=False))
 
     def parse_computers_files(self, files):
 
@@ -899,12 +919,12 @@ def parse_files(self, files):
                 count = 0
                 for file in files:
                     data = file.get_json().get('data', [])
-                    for idx, dd in enumerate(data):
+                    for idx, computer in enumerate(data):
                         count += 1
                         bar.show(count)
 
-                        oid = dd.get('ObjectIdentifier', None)
-                        properties = dd.get('Properties', None)
+                        oid = computer.get('ObjectIdentifier', None)
+                        properties = computer.get('Properties', None)
 
                         if oid is None or properties is None:
                             raise Exception('Unable to parse domain data')
@@ -932,6 +952,22 @@ def parse_files(self, files):
 
                         domain_id = self.get_domain(properties)
 
+                        if (gid := Tools.get_dict_value(computer, 'PrimaryGroupSID')) is not None:
+                            if gid not in self.groups:
+                                self.groups[gid] = {"members": []}
+                            self.groups[gid]['members'].append(oid)
+
+                            self.db.insert_or_update_bloodhound_edge(
+                                source=oid,
+                                target=gid,
+                                source_label='Computer',
+                                target_label='Group',
+                                edge_type='MemberOf',
+                                edge_props='{isacl: false}',
+                                filter_type='objectid',
+                                props=dict(source=oid, target=gid)
+                            )
+
                         self.db.insert_or_update_credential(
                             domain=domain_id,
                             username=name,
@@ -941,12 +977,13 @@ def parse_files(self, files):
                             ntlm_hash='',
                             type='M')
 
+                        self.process_options(computer, 'Computer')
+
             except KeyboardInterrupt as e:
                 raise e
             finally:
                 bar.hide = True
                 Tools.clear_line()
-
 
     def parse_ou_files(self, files):
 
@@ -1000,7 +1037,6 @@ def parse_files(self, files):
                                         props=dict(source=oid, target=target)
                                     )
 
-
                         if 'Links' in ou and ou['Links']:
                             for gpo in ou['Links']:
                                 self.db.insert_or_update_bloodhound_edge(
@@ -1014,29 +1050,7 @@ def parse_files(self, files):
                                     props=dict(source=oid, target=gpo['GUID'].upper(), enforced=gpo['IsEnforced'])
                                 )
 
-
-                        options = [
-                            ('LocalAdmins', 'AdminTo'),
-                            ('PSRemoteUsers', 'CanPSRemote'),
-                            ('DcomUsers', 'ExecuteDCOM'),
-                            ('RemoteDesktopUsers', 'CanRDP'),
-                        ]
-
-                        for option, edge_name in options:
-                            if option in ou and ou[option]:
-                                targets = ou[option]
-                                for target in targets:
-                                    for computer in ou['Computers']:
-                                        self.db.insert_or_update_bloodhound_edge(
-                                            source=computer,
-                                            target=target['ObjectIdentifier'],
-                                            source_label=target['ObjectType'],
-                                            target_label='Computer',
-                                            edge_type='edge_name',
-                                            edge_props='{isacl: false, fromgpo: true}',
-                                            filter_type='objectid',
-                                            props=dict(target=computer, source=target['ObjectIdentifier'])
-                                        )
+                        self.process_options(ou, 'Computer')
 
             except KeyboardInterrupt as e:
                 raise e
@@ -1199,28 +1213,7 @@ def parse_files(self, files):
                                            enforced=gpo['IsEnforced'])
                                 )
 
-                        options = [
-                            ('LocalAdmins', 'AdminTo'),
-                            ('PSRemoteUsers', 'CanPSRemote'),
-                            ('DcomUsers', 'ExecuteDCOM'),
-                            ('RemoteDesktopUsers', 'CanRDP'),
-                        ]
-
-                        for option, edge_name in options:
-                            if option in domain and domain[option]:
-                                targets = domain[option]
-                                for target in targets:
-                                    for computer in domain['Computers']:
-                                        self.db.insert_or_update_bloodhound_edge(
-                                            source=target['ObjectIdentifier'],
-                                            target=computer,
-                                            source_label=target['ObjectType'],
-                                            target_label='Computer',
-                                            edge_type=edge_name,
-                                            edge_props='{isacl: false, fromgpo: true}',
-                                            filter_type='objectid',
-                                            props=dict(source=target['ObjectIdentifier'], target=computer)
-                                        )
+                        self.process_options(domain, 'Computer')
 
             except KeyboardInterrupt as e:
                 raise e
@@ -1229,7 +1222,6 @@ def parse_files(self, files):
                 Tools.clear_line()
 
     def parse_groups_file(self, files):
-        groups = {}
 
         Color.pl('{?} {W}{D}importing groups...{W}')
 
@@ -1249,6 +1241,9 @@ def parse_files(self, files):
                         if gid is None or properties is None:
                             raise Exception('Unable to parse domain data')
 
+                        if gid not in self.groups:
+                            self.groups[gid] = { "members": [] }
+
                         self.db.insert_or_update_bloodhound_object(
                             label='Group',
                             object_id=gid,
@@ -1259,6 +1254,34 @@ def parse_files(self, files):
 
                         if 'Aces' in group and group['Aces'] is not None:
                             self.process_ace_list(group['Aces'], gid, "Group")
+
+                        if (pgsid := Tools.get_dict_value(group, 'PrimaryGroupSID')) is not None:
+                            if pgsid not in self.groups:
+                                self.groups[pgsid] = {"members": []}
+                            self.groups[pgsid]['members'].append(gid)
+
+                            self.db.insert_or_update_bloodhound_edge(
+                                source=gid,
+                                target=pgsid,
+                                source_label='Group',
+                                target_label='Group',
+                                edge_type='MemberOf',
+                                edge_props='{isacl: false}',
+                                filter_type='objectid',
+                                props=dict(source=gid, target=pgsid)
+                            )
+
+                        for entry in Tools.get_dict_value(group, 'AllowedToDelegate', []):
+                            self.db.insert_or_update_bloodhound_edge(
+                                source=gid,
+                                target=entry,
+                                source_label='Group',
+                                target_label='Computer',
+                                edge_type='AllowedToDelegate',
+                                edge_props='{isacl: false}',
+                                filter_type='objectid',
+                                props=dict(source=gid, target=entry)
+                            )
 
                         for member in group['Members']:
                             self.db.insert_or_update_bloodhound_edge(
@@ -1275,31 +1298,31 @@ def parse_files(self, files):
                             t = group.get('ObjectType', None)
                             oid = group['ObjectIdentifier']
                             if t == "Group":
-                                groups[gid]['members'].append(oid)
+                                self.groups[gid]['members'].append(oid)
 
                         name = properties.get('name', '@').split('@')[0]
                         dn = properties.get('distinguishedname', None)
 
                         domain_id = self.get_domain(properties)
 
-                        groups[gid] = {
+                        self.groups[gid].update(**{
                             "name": name,
                             "domain_id": domain_id,
                             "object_identifier": gid,
                             "dn": dn,
                             "json_members": group.get('Members', []),
-                            "members": [],
-                            "membership": []
-                        }
+                            "members": self.groups.get(gid, []).get("members", []),
+                            "membership": self.groups.get(gid, []).get("membership", [])
+                        })
 
                         self.db.insert_group(
-                            domain=groups[gid]['domain_id'],
-                            object_identifier=groups[gid].get('object_identifier', '') if groups[gid].get(
+                            domain=self.groups[gid]['domain_id'],
+                            object_identifier=self.groups[gid].get('object_identifier', '') if self.groups[gid].get(
                                 'object_identifier', None) is not None else '',
-                            name=groups[gid]['name'],
-                            dn=groups[gid].get('dn', '') if groups[gid].get('dn', None) is not None else '',
-                            members=json.dumps(groups[gid]['json_members']),
-                            membership=','.join(groups[gid]['membership'])
+                            name=self.groups[gid]['name'],
+                            dn=self.groups[gid].get('dn', '') if self.groups[gid].get('dn', None) is not None else '',
+                            members=json.dumps(self.groups[gid]['json_members']),
+                            membership=','.join(self.groups[gid]['membership'])
                         )
 
             except KeyboardInterrupt as e:
@@ -1308,16 +1331,16 @@ def parse_files(self, files):
                 bar.hide = True
                 Tools.clear_line()
 
-        if len(groups) > 0:
+        if len(self.groups) > 0:
 
             Color.pl('{?} {W}{D}calculating group chain...{W}' + ' ' * 50)
-            cnt = len(groups)
+            cnt = len(self.groups)
             with progress.Bar(label=" Processing ", expected_size=cnt) as bar:
                 try:
-                    for idx, g in enumerate(groups):
+                    for idx, g in enumerate(self.groups):
                         bar.show(idx)
 
-                        groups[g]['membership'] = [g1 for g1 in self.get_group_chain(groups, g, [])]
+                        self.groups[g]['membership'] = [g1 for g1 in self.get_group_chain(self.groups, g, [])]
 
                 except KeyboardInterrupt as e:
                     raise e
@@ -1409,30 +1432,33 @@ def parse_files(self, files):
                             **properties
                         )
 
-                        if 'PrimaryGroupSid' in user and user['PrimaryGroupSid']:
+                        if (pgsid := Tools.get_dict_value(user, 'PrimaryGroupSID')) is not None:
+                            if pgsid not in self.groups:
+                                self.groups[pgsid] = {"members": []}
+                            self.groups[pgsid]['members'].append(oid)
+
                             self.db.insert_or_update_bloodhound_edge(
                                 source=oid,
-                                target=user['PrimaryGroupSid'],
+                                target=pgsid,
                                 source_label='User',
                                 target_label='Group',
                                 edge_type='MemberOf',
                                 edge_props='{isacl: false}',
                                 filter_type='objectid',
-                                props=dict(source=oid, target=user['PrimaryGroupSid'])
+                                props=dict(source=oid, target=pgsid)
                             )
 
-                        if 'AllowedToDelegate' in user and user['AllowedToDelegate']:
-                            for entry in user['AllowedToDelegate']:
-                                self.db.insert_or_update_bloodhound_edge(
-                                    source=oid,
-                                    target=entry,
-                                    source_label='User',
-                                    target_label='Computer',
-                                    edge_type='AllowedToDelegate',
-                                    edge_props='{isacl: false}',
-                                    filter_type='objectid',
-                                    props=dict(source=oid, target=entry)
-                                )
+                        for entry in Tools.get_dict_value(user, 'AllowedToDelegate', []):
+                            self.db.insert_or_update_bloodhound_edge(
+                                source=oid,
+                                target=entry,
+                                source_label='User',
+                                target_label='Computer',
+                                edge_type='AllowedToDelegate',
+                                edge_props='{isacl: false}',
+                                filter_type='objectid',
+                                props=dict(source=oid, target=entry)
+                            )
 
                         # TODO add HasSIDHistory objects
 
@@ -1561,3 +1587,65 @@ def parse_files(self, files):
                 filter_type='objectid',
                 props=props
             )
+
+    def process_options(self, target: dict, target_type: str) -> None:
+
+        options = [
+            ('LocalAdmins', 'AdminTo', '{isacl:false, fromgpo: false}', []),
+            ('PSRemoteUsers', 'CanPSRemote', '{isacl:false, fromgpo: false}', []),
+            ('DcomUsers', 'ExecuteDCOM', '{isacl:false, fromgpo: false}', []),
+            ('RemoteDesktopUsers', 'CanRDP', '{isacl:false, fromgpo: false}', []),
+            ('Sessions', 'HasSession', '{isacl:false, source:"netsessionenum"}', ['User']),
+            ('PrivilegedSessions', 'HasSession', '{isacl:false, source:"netwkstauserenum"}', ['User']),
+            ('RegistrySessions', 'HasSession', '{isacl:false, source:"registry"}', ['User']),
+        ]
+
+        maps = dict(
+            user=['ObjectIdentifier', 'UserSID'],
+            computer=['ObjectIdentifier', 'ComputerSID'],
+        )
+
+        oid = Tools.get_dict_value(target, 'ObjectIdentifier', None)
+        if oid is None:
+            return
+
+        for option, edge_name, edge_props, ot_list in options:
+            if isinstance((source := Tools.get_dict_value(target, option, {})), dict):
+                if isinstance((r_dict := Tools.get_dict_value(source, 'Results', [])), list):
+
+                    for src_data in r_dict:
+
+                        if isinstance(src_data, dict):
+
+                            sid = Tools.get_dict_value(src_data, 'ObjectIdentifier', None)
+                            st = src_data.get('ObjectType', None)
+                            if st is None:
+                                st, sid = next(iter([
+                                    (o, v) for o in ot_list for k in maps[o.lower()]
+                                    if (v := Tools.get_dict_value(src_data, k, None)) is not None
+                                ]), (None, None))
+
+                            if st is None or sid is None:
+                                raise Exception('Unable to get/create property from JSON: %s' % json.dumps(source))
+
+                            print(json.dumps(dict(
+                                source=oid,
+                                target=sid,
+                                source_label=target_type,
+                                target_label=st,
+                                edge_type=edge_name,
+                                edge_props=edge_props,
+                                filter_type='objectid',
+                                props=dict(target=sid, source=oid)
+                                             )))
+
+                            self.db.insert_or_update_bloodhound_edge(
+                                source=oid,
+                                target=sid,
+                                source_label=target_type,
+                                target_label=st,
+                                edge_type=edge_name,
+                                edge_props=edge_props,
+                                filter_type='objectid',
+                                props=dict(target=sid, source=oid)
+                            )
