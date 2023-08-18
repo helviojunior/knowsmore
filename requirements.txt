@@ -9,7 +9,9 @@ neo4j<5.0.0,>=4.1.1
 impacket>=0.10.0
 numpy>=1.19.5
 ansi2image>=0.1.4
-aioconsole<0.4.0,>=0.3.3
-minikerberos==0.3.3
-pypsrp<0.8.0,>=0.7.0
-xmltodict<0.13.0,>=0.12.0
+
+#From CrackMapExec (https://github.com/mpgn/CrackMapExec/blob/master/pyproject.toml)
+aioconsole>=0.3.3
+minikerberos>=0.4.0
+pypsrp>=0.7.0
+xmltodict>=0.12.0
