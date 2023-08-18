@@ -843,51 +843,51 @@ class Bloodhound(CmdBase):
 
 def parse_files(self, files):
 
-        unsupported = [
-            f for f in files
-            if f.version != 4 and f.version != 5
-        ]
-        if len(unsupported) > 0:
-            Logger.pl('{!} {R}error: Unsupported BloodHound Version:{W}')
-            for f in unsupported:
-                Color.pl('{!} {W}{D}%s: {G}v%d{W}' % (f.file_name, f.version))
-            Tools.exit_gracefully(1)
+    unsupported = [
+        f for f in files
+        if f.version != 4 and f.version != 5
+    ]
+    if len(unsupported) > 0:
+        Logger.pl('{!} {R}error: Unsupported BloodHound Version:{W}')
+        for f in unsupported:
+            Color.pl('{!} {W}{D}%s: {G}v%d{W}' % (f.file_name, f.version))
+        Tools.exit_gracefully(1)
 
-        # Domains
-        self.parse_domains_files(sorted([
-            f for f in files
-            if f.type == 'domains'
-        ], key=lambda x: (x.order, x.file_name), reverse=False))
+    # Domains
+    self.parse_domains_files(sorted([
+        f for f in files
+        if f.type == 'domains'
+    ], key=lambda x: (x.order, x.file_name), reverse=False))
 
-        # GPO
-        self.parse_gpo_files(sorted([
-            f for f in files
-            if f.type == 'gpos'
-        ], key=lambda x: (x.order, x.file_name), reverse=False))
+    # GPO
+    self.parse_gpo_files(sorted([
+        f for f in files
+        if f.type == 'gpos'
+    ], key=lambda x: (x.order, x.file_name), reverse=False))
 
-        # OU
-        self.parse_ou_files(sorted([
-            f for f in files
-            if f.type == 'ous'
-        ], key=lambda x: (x.order, x.file_name), reverse=False))
+    # OU
+    self.parse_ou_files(sorted([
+        f for f in files
+        if f.type == 'ous'
+    ], key=lambda x: (x.order, x.file_name), reverse=False))
 
-        # Groups
-        self.parse_groups_file(sorted([
-            f for f in files
-            if f.type == 'groups'
-        ], key=lambda x: (x.order, x.file_name), reverse=False))
+    # Groups
+    self.parse_groups_file(sorted([
+        f for f in files
+        if f.type == 'groups'
+    ], key=lambda x: (x.order, x.file_name), reverse=False))
 
-        # Computers
-        self.parse_computers_files(sorted([
-            f for f in files
-            if f.type == 'computers'
-        ], key=lambda x: (x.order, x.file_name), reverse=False))
+    # Computers
+    self.parse_computers_files(sorted([
+        f for f in files
+        if f.type == 'computers'
+    ], key=lambda x: (x.order, x.file_name), reverse=False))
 
-        # Users
-        self.parse_users_file(sorted([
-            f for f in files
-            if f.type == 'users'
-        ], key=lambda x: (x.order, x.file_name), reverse=False))
+    # Users
+    self.parse_users_file(sorted([
+        f for f in files
+        if f.type == 'users'
+    ], key=lambda x: (x.order, x.file_name), reverse=False))
 
     def parse_computers_files(self, files):
 

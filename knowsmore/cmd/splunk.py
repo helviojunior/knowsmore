@@ -9,7 +9,7 @@ from argparse import _ArgumentGroup, Namespace
 from pathlib import Path
 from binascii import hexlify
 from enum import Enum
-from urllib.parse import urlparse
+from urllib3.util import parse_url
 from clint.textui import progress
 
 from knowsmore.libs.exporterbase import ExporterBase
@@ -67,7 +67,7 @@ class Splunk(CmdBase):
         if (args.txt_url is not None and args.txt_url.strip() != '' \
             and args.txt_token is not None and args.txt_token.strip() != ''):
 
-            url = urlparse(args.txt_url)
+            url = parse_url(args.txt_url)
 
             #Adicionar aqui o caminho padrão da API do Splunk
             self.url_base = f'{url.scheme}://{url.netloc}/'
