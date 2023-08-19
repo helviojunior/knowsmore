@@ -1628,7 +1628,6 @@ class Bloodhound(CmdBase):
                             if st is None or sid is None:
                                 raise Exception('Unable to get/create property from JSON: %s' % json.dumps(source))
 
-
                             self.db.insert_or_update_bloodhound_edge(
                                 source=oid,
                                 target=sid,
