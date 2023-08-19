@@ -95,7 +95,7 @@ class Bloodhound(CmdBase):
                 # Obtain meta tag
                 js.seek(-0x100, os.SEEK_END)
                 lastbytes = str(js.read(0x100), 'utf-8').strip()
-                metatagstr = re.search(r'"meta"\s*:\s*{(?:.|\n)*?}', lastbytes, re.MULTILINE | re.IGNORECASE).group(0)
+                metatagstr = re.search(r'"meta":\s*{(?:.|\n)*?}', lastbytes, re.MULTILINE | re.IGNORECASE).group(0)
                 metatag = json.loads('{' + metatagstr + '}')
                 return metatag.get('meta', {})
 
