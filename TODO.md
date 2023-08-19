@@ -38,3 +38,6 @@
 
 ## Wipe
 * [x] Module to clear sensitive data (Clear text passwords and hashes) keeping statistics
+
+## Internal
+* [x] Implement test script with one sample BloodHound importer
