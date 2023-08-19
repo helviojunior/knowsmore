@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 # -*- coding: UTF-8 -*-
+import base64
+import datetime
 import os
 import string, random, sys, re
 import unicodedata
@@ -185,3 +187,15 @@ class Tools:
                 v for k, v in data.items()
                 if k.strip().lower() == key
             ]), default)
+
+    @staticmethod
+    def json_serial(obj):
+        """JSON serializer for objects not serializable by default json code"""
+
+        if isinstance(obj, (datetime.datetime, datetime.date)):
+            return obj.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+        if isinstance(obj, bytes):
+            return base64.b64encode(obj).decode("UTF-8")
+
+        raise TypeError("Type %s not serializable" % type(obj))

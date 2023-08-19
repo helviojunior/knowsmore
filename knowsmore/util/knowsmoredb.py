@@ -156,8 +156,7 @@ class KnowsMoreDB(Database):
             f'{source_label}:{target_label}:{edge_type}:{source}:{target}:{txt_props}'.encode("UTF-8")
         ).hexdigest().lower()
 
-        self.insert_update_one(
-            'bloodhound_edge',
+        data = dict(
             edge_id=checksum,
             source_id=source,
             destination_id=target,
@@ -169,6 +168,14 @@ class KnowsMoreDB(Database):
             updated_date=datetime.datetime.utcnow(),
             props=txt_props
         )
+
+        self.insert_update_one('bloodhound_edge', **data)
+
+        from ..config import Configuration
+        from .tools import Tools
+        if Configuration.verbose >= 4:
+            Color.pl('{*} {O}insert_or_update_bloodhound_edge: {G}%s{W}{D}{W}' % (
+                json.dumps(data, default=Tools.json_serial)))
 
     def insert_or_update_credential(self, domain: int, username: str, ntlm_hash: str,
                                     dn: str = '', groups: str = '', object_identifier: str = '',
