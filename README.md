@@ -219,7 +219,7 @@ knowsmore --user-pass --username administrator --password Sec4US@2023
 
 # or adding the company name
 
---company sec4us --user-pass --username administrator --password Sec4US@2023 --company sec4us
+knowsmore --user-pass --username administrator --password Sec4US@2023 --company sec4us
 ```
 
 Integrate all credentials cracked to Neo4j Bloodhound database
