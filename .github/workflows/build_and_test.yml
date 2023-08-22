@@ -6,14 +6,20 @@ name: Test Build
 on:
     push:
       branches: [ main ]
+      paths-ignore:
+        - .gitignore
+        - README.md
+        - LICENSE
+        - TODO
+        - knowsmore/__meta__.py
     pull_request:
       branches: [ main ]
-    paths-ignore:
-      - .gitignore
-      - README.md
-      - LICENSE
-      - TODO
-      - knowsmore/__meta__.py
+      paths-ignore:
+        - .gitignore
+        - README.md
+        - LICENSE
+        - TODO
+        - knowsmore/__meta__.py
 
 jobs:
   lint:
