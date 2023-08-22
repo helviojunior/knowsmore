@@ -10,13 +10,15 @@
 * [ ] Import Domain data from Powershell MSOnline module
 * [ ] Import User data from Powershell MSOnline module
 * [ ] Import Group data from Powershell MSOnline module
-* [ ] Import NTLM Hashes from CrackMapExec output file 
+* [ ] Import NTLM Hashes from CrackMapExec output file
+* [ ] Import data from ldapsearch
+* [ ] Import data from Sysinternals ADExplorer
 * [ ] Import Cracked NTLM hashes from John the Ripper output file
 
 ## Analysers
 * [x] Analyse the quality of password (length , lower case, upper case, digit, special and latin)
 * [x] Analyse similarity of password with company name
-
+* [ ] When added user as compromised, alert id this user may have a path to critical target 
 
 ## Finders
 * [x] Search for users
@@ -32,8 +34,8 @@
 * [x] Export data to JSON file
 * [x] Export all cracked credentials to BloodHound Neo4j Database as 'owned object'
 * [x] Export all data to BloodHound Neo4j Database (much faster than BloodHound UI)
+* [x] Export data to Splunk
 * [ ] Export data to ElasticSearch
-* [ ] Export data to Splunk
 * [ ] Export Password Spray list
 
 ## Wipe

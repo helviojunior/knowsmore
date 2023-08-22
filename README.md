@@ -167,11 +167,17 @@ After that import
 knowsmore --ntlm-hash --import-ntds ~/Desktop/client_name.ntds
 ```
 
+## Generating a custom wordlist
+
+```bash
+knowsmore --word-list -o "~/Desktop/Wordlist/my_custom_wordlist.txt" --batch --name company_name
+```
+
 ## Importing cracked hashes
 
 ### Cracking hashes
 
-In order to crack the hashes i usualy use hashcat with the command bellow
+In order to crack the hashes, I usually use `hashcat` with the command bellow
 
 ```bash
 # Extract NTLM hashes from file
@@ -203,6 +209,18 @@ knowsmore --wipe
 ```
 
 ## BloodHound Mark as owned
+
+### One User
+
+During the assessment you can find (in a several ways) users password, so you can add this to the Knowsmore database
+
+```bash
+knowsmore --user-pass --username administrator --password Sec4US@2023
+
+# or adding the company name
+
+--company sec4us --user-pass --username administrator --password Sec4US@2023 --company sec4us
+```
 
 Integrate all credentials cracked to Neo4j Bloodhound database
 
