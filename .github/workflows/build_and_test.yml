@@ -12,6 +12,8 @@ on:
         - LICENSE
         - TODO
         - knowsmore/__meta__.py
+        - .github/workflows/build_and_test.yml
+
     pull_request:
       branches: [ main ]
       paths-ignore:
@@ -20,6 +22,7 @@ on:
         - LICENSE
         - TODO
         - knowsmore/__meta__.py
+        - .github/workflows/build_and_test.yml
 
 jobs:
   lint:
