@@ -102,6 +102,7 @@ class UserPass(CmdBase):
             pdata['company_similarity'] = sorted(
                         [self.password.calc_ratio(n1) for n1 in Configuration.company]
                     )[-1]
+            Logger.pl('{+} {C}Calculated company name similarity: {O}%s{W}' % pdata['company_similarity'])
 
         self.db.insert_or_update_credential(
             domain=rows[0]['domain_id'],
