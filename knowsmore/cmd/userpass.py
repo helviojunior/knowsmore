@@ -117,3 +117,30 @@ class UserPass(CmdBase):
         Color.pl('{?} {W}{D}Password data:{W}')
         print(self.password)
 
+        Color.pl('{?} {W}{D}Looking for other users with the same password...{W}')
+
+        sql = (
+            'select c.credential_id, c.name, c.type, c.object_identifier, c.dn, d.domain_id, d.name as domain_name, d.object_identifier as domain_object_identifier, '
+            'd.dn as domain_dn, p.password, p.ntlm_hash, p.md5_hash, p.sha1_hash, p.sha256_hash, p.sha512_hash '
+            'from credentials as c '
+            'inner join passwords as p '
+            'on c.password_id = p.password_id '
+            'inner join domains as d '
+            'on c.domain_id = d.domain_id '
+            ' where p.ntlm_hash like ? and c.credential_id != ?'
+            ' order by c.name'
+        )
+        args = [self.password.ntlm_hash, credential_id]
+
+        rows = self.db.select_raw(
+            sql=sql,
+            args=args
+        )
+
+        if len(rows) == 0:
+            Logger.pl('{?} {G}Password/hash inserted but did not find other user with this password{W}\r\n')
+            exit(0)
+
+        print(Tools.get_tabulated(rows))
+
+        Logger.pl('{+} {O}%s{W}{C} register found{W}' % len(rows))
