@@ -13,6 +13,7 @@ on:
         - TODO
         - knowsmore/__meta__.py
         - .github/workflows/build_and_test.yml
+        - .github/workflows/build_and_publish.yml
 
     pull_request:
       branches: [ main ]
@@ -23,6 +24,7 @@ on:
         - TODO
         - knowsmore/__meta__.py
         - .github/workflows/build_and_test.yml
+        - .github/workflows/build_and_publish.yml
 
 jobs:
   lint:
