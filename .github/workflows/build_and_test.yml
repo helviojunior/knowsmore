@@ -54,9 +54,51 @@ jobs:
         run: |
           flake8 . --count --ignore=E1,E2,E3,E501,W291,W293 --exit-zero --max-complexity=65 --max-line-length=127 --statistics
 
+  bloodhound_ingestor:
+    name: Check bloodhound ingestor integrity
+    needs: lint
+    runs-on: ubuntu-latest
+    if:
+      github.event_name == 'push' || github.event.pull_request.head.repo.full_name !=
+      github.repository
+
+    steps:
+      - name: Checkout KnowsMore
+        uses: actions/checkout@v3
+
+      - name: Setup Python 3.9
+        uses: actions/setup-python@v3
+        with:
+          python-version: 3.9
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          apt install docker-compose jq
+
+      - name: Clonning repository
+        run: |
+          git clone https://github.com/SpecterOps/BloodHound.git /opt/BloodHound
+          cd /opt/BloodHound/
+          cp examples/docker-compose/* ./
+          jq -r '.features.enable_auth |= false | .default_admin.email_address |= "admin@sec4us.com.br" | .default_admin.password |= "@Pass123456" | .default_admin.expire_now |= false' examples/docker-compose/bloodhound.config.json > bloodhound.config.json
+
+      - name: Creatting docker image
+        run: |
+          docker-compose up --detach
+
+      - name: Running ingestor
+        run: |
+          chmpd +x tests/bh.sh
+          tests/bh.sh
+
+      - name: Removing docker image
+        run: |
+          docker-compose down -v --rmi all
+
   test:
     name: Run unit tests and build wheel
-    needs: lint
+    needs: bloodhound_ingestor
     runs-on: ${{ matrix.os }}
     if:
       github.event_name == 'push' || github.event.pull_request.head.repo.full_name !=
