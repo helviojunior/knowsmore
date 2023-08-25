@@ -95,8 +95,8 @@ jobs:
 
       - name: Running ingestor
         run: |
-          chmpd +x tests/bh.sh
-          tests/bh.sh
+          chmod +x ./tests/bh.sh
+          ./tests/bh.sh
 
       - name: Removing docker image
         run: |
