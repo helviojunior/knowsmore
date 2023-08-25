@@ -177,15 +177,19 @@ knowsmore --word-list -o "~/Desktop/Wordlist/my_custom_wordlist.txt" --batch --n
 
 ### Cracking hashes
 
-In order to crack the hashes, I usually use `hashcat` with the command bellow
+First extract all hashes to a txt file
 
 ```bash
-# Extract NTLM hashes from NTDS file
-# cat ~/Desktop/client_name.ntds | cut -d ':' -f4 > ntlm_hashes.txt
-
 # Extract NTLM hashes to file
 nowsmore --ntlm-hash --export-hashes "~/Desktop/ntlm_hash.txt"
 
+# Or, extract NTLM hashes from NTDS file
+cat ~/Desktop/client_name.ntds | cut -d ':' -f4 > ntlm_hashes.txt
+```
+
+In order to crack the hashes, I usually use `hashcat` with the command bellow
+
+```bash
 # Wordlist attack
 hashcat -m 1000 -a 0 -O -o "~/Desktop/cracked.txt" --remove "~/Desktop/ntlm_hash.txt" "~/Desktop/Wordlist/*"
 
