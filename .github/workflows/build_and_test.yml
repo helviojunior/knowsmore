@@ -74,7 +74,12 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          apt install docker-compose jq
+
+      - name: Install dependencies
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: docker-compose jq
+          version: 1.0
 
       - name: Clonning repository
         run: |
