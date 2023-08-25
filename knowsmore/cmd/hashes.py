@@ -443,7 +443,7 @@ class NTLMHash(CmdBase):
 
     def get_ntds_columns(self):
         self.print_verbose('Getting file column design')
-        limit = 50
+        limit = 100
         count = 0
         user_index = ntlm_hash_index = -1
 
