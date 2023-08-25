@@ -66,14 +66,19 @@ jobs:
       - name: Checkout KnowsMore
         uses: actions/checkout@v3
 
-      - name: Setup Python 3.9
+      - name: Setup Python 3.10
         uses: actions/setup-python@v3
         with:
-          python-version: 3.9
+          python-version: 3.10
 
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
+          python -m pip install -r tests/requirements-test.txt
+
+      - name: Install knowsmore
+        run: |
+          pip install .
 
       - name: Install dependencies
         uses: awalsh128/cache-apt-pkgs-action@latest
@@ -86,7 +91,7 @@ jobs:
           git clone https://github.com/SpecterOps/BloodHound.git /opt/BloodHound
           cd /opt/BloodHound/
           cp examples/docker-compose/* ./
-          jq -r '.features.enable_auth |= false | .default_admin.email_address |= "admin@sec4us.com.br" | .default_admin.password |= "@Pass123456" | .default_admin.expire_now |= false' examples/docker-compose/bloodhound.config.json > bloodhound.config.json
+          jq -r '.features.enable_auth |= false | .default_admin.email_address |= "admin@test.local" | .default_admin.password |= "@Pass123456" | .default_admin.expire_now |= false' examples/docker-compose/bloodhound.config.json > bloodhound.config.json
 
       - name: Creatting docker image
         run: |
@@ -97,6 +102,10 @@ jobs:
         run: |
           chmod +x ./tests/bh.sh
           ./tests/bh.sh
+
+      - name: Run BloodHound unit tests
+        run: |
+          pytest -s tests/tests_bh.py
 
       - name: Removing docker image
         run: |
