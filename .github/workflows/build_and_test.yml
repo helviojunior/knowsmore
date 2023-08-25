@@ -90,6 +90,7 @@ jobs:
 
       - name: Creatting docker image
         run: |
+          cd /opt/BloodHound
           docker-compose up --detach
 
       - name: Running ingestor
@@ -99,6 +100,7 @@ jobs:
 
       - name: Removing docker image
         run: |
+          cd /opt/BloodHound
           docker-compose down -v --rmi all
 
   test:
