@@ -71,6 +71,7 @@ jobs:
 
       - name: Build artifact
         run: |
+          rm -rf ./tests/
           python setup.py sdist
 
   publish:
@@ -104,6 +105,7 @@ jobs:
 
       - name: Build artifact
         run: |
+          rm -rf ./tests/
           python setup.py sdist
 
       - name: Publish package in Live Environment
