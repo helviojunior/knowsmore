@@ -42,7 +42,7 @@ class WordList(CmdBase):
     small = False
     unique_chars = []
     unique_ch_b = 0
-    char_space = LEETS1
+    char_space = None
     filename = None
     batch = False
     check_database = False
@@ -138,6 +138,8 @@ class WordList(CmdBase):
             self.char_space = LEETS2
         elif self.small or self.level == 2:
             self.char_space = LEETS3
+        else:
+            self.char_space = LEETS1
 
         self.unique_chars = set([v for l1 in [list(value) for value in self.char_space.values()] for v in l1])
         self.unique_ch_b = int(np.sum([len(v.encode("UTF-8")) for v in self.unique_chars]))
@@ -209,6 +211,19 @@ class WordList(CmdBase):
             Logger.pl('{+} {W}Generate {O}%d{W} lines ({O}%s{W}) to {G}%s{W}' % (lines, Tools.sizeof_fmt(file_stats), self.filename))
 
     def calculate(self) -> int:
+
+        if self.name is None:
+            return 0
+
+        if not isinstance(self.name, str):
+            raise Exception("Invalid type received: %s" % type(self.name))
+
+        if self.name.strip() == 0:
+            return 0
+
+        if self.char_space is None:
+            self.setup()
+
         s = len(self.name)
         leet_lines = np.prod([len([chars for chars in self.char_space.get(c)]) for c in self.name])
         padding_space = 0
