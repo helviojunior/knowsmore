@@ -248,6 +248,17 @@ class WordList(CmdBase):
         return r
 
     def generate(self, word, index) -> list:
+
+        if index <= 1:
+            if self.name is None:
+                return []
+
+            if not isinstance(self.name, str):
+                raise Exception("Invalid type received: %s" % type(self.name))
+
+            if self.name.strip() == 0:
+                return []
+
         c = word[index:index + 1]
         if c in self.char_space:
             for i, s in enumerate(self.char_space.get(c)):
