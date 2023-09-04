@@ -106,6 +106,7 @@ class Database(object):
         # No inserted, need to update
         if c.rowcount == 0:
             table_name = self.scrub(table_name)
+            print(table_name, self.constraints)
             f_columns = self.constraints[table_name]
             f_values = tuple([kwargs.get(c, None) for c in f_columns],)
             args = {k: v for k, v in kwargs.items() if k not in exclude_on_update}
@@ -216,7 +217,7 @@ class Database(object):
                '  il.origin = "u"  '
                'ORDER BY table_name, key_name, ii.seqno')
 
-        cursor = Database.db_connection.execute(sql)
+        cursor = self.db_connection.execute(sql)
         columns = cursor.description
         db_scheme = [{columns[index][0]: column for index, column in enumerate(value)} for value in cursor.fetchall()]
 
@@ -265,8 +266,8 @@ class Database(object):
             connection object
         """
 
-        if Database.db_connection is not None:
-            return Database.db_connection
+        if self.db_connection is not None:
+            return self.db_connection
 
         conn = sqlite3.connect(self.db_name, detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
         conn.create_function('log', 2, math.log)
@@ -297,12 +298,12 @@ class Database(object):
         #cursor.execute("PRAGMA busy_timeout=15000")  # milliseconds
         #cursor.execute("PRAGMA lock_timeout=5000")  # milliseconds
 
-        Database.db_connection = conn
+        self.db_connection = conn
 
         # get database constraints
         self.get_constraints()
 
-        return Database.db_connection
+        return self.db_connection
 
     def scrub(self, input_string):
         return Database.scrub(input_string)
