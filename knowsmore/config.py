@@ -64,8 +64,7 @@ class Configuration(object):
         module = args.get_module()
 
         if module is None:
-            Color.pl('{!} {R}error: missing a mandatory option, use -h help{W}\r\n')
-            exit(1)
+            Configuration.mandatory()
 
         Configuration.verbose = args.args.v
 
@@ -101,6 +100,11 @@ class Configuration(object):
         Logger.pl('     {C}database file:{O} %s{W}' % db_name)
 
         print('  ')
+
+    @staticmethod
+    def mandatory():
+        Logger.pl('{!} {R}error: missing a mandatory option, use -h help{W}\r\n')
+        exit(1)
 
     @staticmethod
     def get_banner():
