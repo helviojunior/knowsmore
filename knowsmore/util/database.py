@@ -106,7 +106,6 @@ class Database(object):
         # No inserted, need to update
         if c.rowcount == 0:
             table_name = self.scrub(table_name)
-            print(table_name, self.constraints)
             f_columns = self.constraints[table_name]
             f_values = tuple([kwargs.get(c, None) for c in f_columns],)
             args = {k: v for k, v in kwargs.items() if k not in exclude_on_update}
