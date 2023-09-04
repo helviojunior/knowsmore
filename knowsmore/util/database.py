@@ -293,6 +293,10 @@ class Database(object):
         cursor.execute("PRAGMA journal_mode=MEMORY")
         # cursor.execute("PRAGMA foreign_keys=ON")
 
+        #cursor.execute("PRAGMA synchronous=OFF")
+        #cursor.execute("PRAGMA busy_timeout=15000")  # milliseconds
+        #cursor.execute("PRAGMA lock_timeout=5000")  # milliseconds
+
         Database.db_connection = conn
 
         # get database constraints
