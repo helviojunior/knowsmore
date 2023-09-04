@@ -63,8 +63,8 @@ class CreateDb(CmdBase):
 
             os.remove(self.db_name)
 
-        Database(auto_create=True,
-                 db_name=self.db_name)
+        KnowsMoreDB(auto_create=True,
+                    db_name=self.db_name)
 
         Logger.pl('{+} {C}Database created {O}%s{W}' % self.db_name)
 

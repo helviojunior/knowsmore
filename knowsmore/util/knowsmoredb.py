@@ -289,3 +289,179 @@ class KnowsMoreDB(Database):
                                    ntlm_hash='31d6cfe0d16ae931b73c59d7e0c089c0',
                                    password='(empty)'
                                    )
+
+    def create_db(self):
+
+        conn = self.connect_to_db(check=False)
+
+        # definindo um cursor
+        cursor = conn.cursor()
+
+        # criando a tabela (schema)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS [domains] (
+                domain_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                object_identifier TEXT NOT NULL DEFAULT(''),
+                dn TEXT NOT NULL DEFAULT(''),
+                UNIQUE(name)
+            );
+        """)
+
+        # criando a tabela (schema)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS [passwords] (
+                password_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                domain_id INTEGER NOT NULL,
+                ntlm_hash TEXT NOT NULL,
+                md5_hash TEXT NOT NULL DEFAULT(''),
+                sha1_hash TEXT NOT NULL DEFAULT(''),
+                sha256_hash TEXT NOT NULL DEFAULT(''),
+                sha512_hash TEXT NOT NULL DEFAULT(''),
+                password TEXT NOT NULL DEFAULT(''),
+                entropy INTEGER NOT NULL DEFAULT(0),
+                strength INTEGER NOT NULL DEFAULT(0),
+                length INTEGER NOT NULL DEFAULT(0),
+                upper INTEGER NOT NULL DEFAULT(0),
+                lower INTEGER NOT NULL DEFAULT(0),
+                digit INTEGER NOT NULL DEFAULT(0),
+                special INTEGER NOT NULL DEFAULT(0),
+                latin INTEGER NOT NULL DEFAULT(0),
+                company_similarity INTEGER NOT NULL DEFAULT(0),
+                UNIQUE(domain_id, ntlm_hash)
+            );
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS [credentials] (
+                credential_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                domain_id INTEGER NOT NULL,
+                type varchar(1) NOT NULL  DEFAULT('U'),
+                name varchar(500) NOT NULL,
+                full_name TEXT NOT NULL DEFAULT(''),
+                object_identifier TEXT NOT NULL DEFAULT(''),
+                dn TEXT NOT NULL DEFAULT(''),
+                groups TEXT NOT NULL DEFAULT(''),
+                password_id INTEGER NOT NULL,
+                user_data_similarity INTEGER NOT NULL DEFAULT(0),
+                enabled INTEGER NOT NULL DEFAULT(1),
+                pwd_last_set datetime NULL,
+                insert_date datetime NOT NULL DEFAULT (datetime('now','localtime')),
+                FOREIGN KEY(domain_id) REFERENCES domains(domain_id),
+                FOREIGN KEY(password_id) REFERENCES passwords(password_id),
+                UNIQUE(domain_id, name)
+            );
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS [groups] (
+                group_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                domain_id INTEGER NOT NULL,
+                name varchar(500) NOT NULL,
+                object_identifier TEXT NOT NULL,
+                dn TEXT NOT NULL,
+                members TEXT NOT NULL DEFAULT(''),
+                membership TEXT NOT NULL DEFAULT(''),
+                FOREIGN KEY(domain_id) REFERENCES domains(domain_id),
+                UNIQUE(name, object_identifier)
+            );
+        """)
+
+        # criando a tabela (schema)
+        cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS [pre_computed] (
+                        password_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ntlm_hash TEXT NOT NULL,
+                        md5_hash TEXT NOT NULL DEFAULT(''),
+                        sha1_hash TEXT NOT NULL DEFAULT(''),
+                        sha256_hash TEXT NOT NULL DEFAULT(''),
+                        sha512_hash TEXT NOT NULL DEFAULT(''),
+                        password TEXT NOT NULL,
+                        UNIQUE(ntlm_hash)
+                    );
+                """)
+
+        cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS [bloodhound_objects] (
+                        object_id TEXT NOT NULL,
+                        r_id TEXT NOT NULL DEFAULT(''),
+                        object_label TEXT NOT NULL,
+                        filter_type TEXT NOT NULL DEFAULT('objectid'),
+                        name TEXT NOT NULL DEFAULT(''),
+                        props TEXT NOT NULL DEFAULT(''),
+                        insert_date datetime not null DEFAULT(strftime('%Y-%m-%d %H:%M:%f', 'NOW', 'localtime')),
+                        updated_date datetime not null DEFAULT(strftime('%Y-%m-%d %H:%M:%f', 'NOW', 'localtime')),
+                        sync_date datetime not null DEFAULT ('1970-01-01'),
+                        UNIQUE(object_id, object_label)
+                    );
+                """)
+
+        conn.commit()
+
+        cursor.execute("""
+                    CREATE INDEX idx_bloodhound_objects_id_label
+                    ON bloodhound_objects (object_id, object_label);
+                """)
+
+        conn.commit()
+
+        cursor.execute("""
+                    CREATE INDEX idx_bloodhound_objects_sync_date
+                    ON bloodhound_objects (sync_date);
+                """)
+
+        conn.commit()
+
+        cursor.execute("""
+                    CREATE INDEX idx_bloodhound_objects_sync_updated_date
+                    ON bloodhound_objects (sync_date, updated_date);
+                """)
+
+        conn.commit()
+
+        cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS [bloodhound_edge] (
+                        edge_id TEXT NOT NULL,
+                        source_id TEXT NOT NULL,
+                        destination_id TEXT NOT NULL,
+                        source_label TEXT NOT NULL,
+                        target_label TEXT NOT NULL,
+                        edge_type TEXT NOT NULL DEFAULT(''),
+                        edge_props TEXT NOT NULL DEFAULT(''),
+                        source_filter_type TEXT NOT NULL DEFAULT('objectid'),
+                        props TEXT NOT NULL DEFAULT(''),
+                        insert_date datetime not null DEFAULT(strftime('%Y-%m-%d %H:%M:%f', 'NOW', 'localtime')),
+                        updated_date datetime not null DEFAULT(strftime('%Y-%m-%d %H:%M:%f', 'NOW', 'localtime')),
+                        sync_date datetime not null DEFAULT ('1970-01-01'),
+                        UNIQUE(edge_id)
+                    );
+                """)
+
+        conn.commit()
+
+        cursor.execute("""
+                    CREATE UNIQUE INDEX idx_bloodhound_edge_edge_id 
+                    ON bloodhound_edge (edge_id);
+                """)
+
+        conn.commit()
+
+        cursor.execute("""
+                    CREATE INDEX idx_bloodhound_edge_updated_date
+                    ON bloodhound_edge (updated_date);
+                """)
+
+        conn.commit()
+
+        cursor.execute("""
+                    CREATE INDEX idx_bloodhound_edge_sync_updated_date
+                    ON bloodhound_edge (sync_date, updated_date);
+                """)
+
+        conn.commit()
+
+        cursor.execute("""
+            INSERT INTO [domains](name) values('default');
+        """)
+
+        conn.commit()
