@@ -465,3 +465,6 @@ class KnowsMoreDB(Database):
         """)
 
         conn.commit()
+
+        #Must get the constraints
+        self.get_contraints()
