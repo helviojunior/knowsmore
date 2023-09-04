@@ -65,7 +65,7 @@ class Database(object):
             self.connect_to_db()
 
     @connect
-    def insert_one(self, conn, table_name, **kwargs):
+    def insert_one(self, conn: Connection, table_name, **kwargs):
         table_name = self.scrub(table_name)
         (columns, values) = self.parse_args(kwargs)
         sql = "INSERT INTO {} ({}) VALUES ({})" \
@@ -74,7 +74,7 @@ class Database(object):
         conn.commit()
 
     @connect
-    def insert_ignore_one(self, conn, table_name, **kwargs):
+    def insert_ignore_one(self, conn: Connection, table_name, **kwargs):
         table_name = self.scrub(table_name)
         (columns, values) = self.parse_args(kwargs)
         sql = "INSERT OR IGNORE INTO {} ({}) VALUES ({})" \
@@ -83,7 +83,7 @@ class Database(object):
         conn.commit()
 
     @connect
-    def insert_replace_one(self, conn, table_name, **kwargs):
+    def insert_replace_one(self, conn: Connection, table_name, **kwargs):
         table_name = self.scrub(table_name)
         (columns, values) = self.parse_args(kwargs)
         sql = "INSERT OR REPLACE INTO {} ({}) VALUES ({})" \
@@ -92,16 +92,18 @@ class Database(object):
         conn.commit()
 
     @connect
-    def insert_update_one(self, conn: str, table_name: str, **kwargs):
-        self.insert_update_one_exclude(table_name, [], **kwargs)
+    def insert_update_one(self, conn: Connection, table_name: str, **kwargs):
+        return self.insert_update_one_exclude(conn, table_name, [], **kwargs)
 
     @connect
-    def insert_update_one_exclude(self, conn: str, table_name: str, exclude_on_update: list = [], **kwargs):
+    def insert_update_one_exclude(self, conn: Connection, table_name: str, exclude_on_update: list = [], **kwargs):
         table_name = self.scrub(table_name)
         (columns, values) = self.parse_args(kwargs)
         sql = "INSERT OR IGNORE INTO {} ({}) VALUES ({})" \
             .format(table_name, ','.join(columns), ', '.join(['?'] * len(columns)))
         c = conn.execute(sql, values)
+
+        status = {'inserted': c.rowcount, 'updated': 0}
 
         # No inserted, need to update
         if c.rowcount == 0:
@@ -115,14 +117,16 @@ class Database(object):
             sql += "{}".format(', '.join([f'{col} = ?' for col in u_columns]))
             if len(f_columns) > 0:
                 sql += " WHERE {}".format(f' and '.join([f'{col} = ?' for col in f_columns]))
-            conn.execute(sql, tuple(u_values + f_values, ))
+            c = conn.execute(sql, tuple(u_values + f_values, ))
             conn.commit()
+
+            status['updated'] = c.rowcount
 
         conn.commit()
 
 
     @connect
-    def select(self, conn, table_name, **kwargs):
+    def select(self, conn: Connection, table_name, **kwargs):
 
         operator = self.scrub(kwargs.get('__operator', 'and'))
 
@@ -147,7 +151,7 @@ class Database(object):
         return data[0]
 
     @connect
-    def select_raw(self, conn, sql: str, args: any):
+    def select_raw(self, conn: Connection, sql: str, args: any):
         cursor = conn.execute(sql, tuple(args,))
         if cursor.rowcount == 0:
             return []
@@ -155,7 +159,7 @@ class Database(object):
         return [{columns[index][0]: column for index, column in enumerate(value)} for value in cursor.fetchall()]
 
     @connect
-    def select_count(self, conn, table_name, **kwargs) -> int:
+    def select_count(self, conn: Connection, table_name, **kwargs) -> int:
 
         operator = self.scrub(kwargs.get('__operator', 'and'))
 
@@ -173,7 +177,7 @@ class Database(object):
         return int(data[0])
 
     @connect
-    def delete(self, conn, table_name, **kwargs) -> None:
+    def delete(self, conn: Connection, table_name, **kwargs) -> None:
 
         operator = self.scrub(kwargs.get('__operator', 'and'))
 
@@ -187,7 +191,7 @@ class Database(object):
         conn.commit()
 
     @connect
-    def update(self, conn, table_name, filter_data, **kwargs):
+    def update(self, conn: Connection, table_name, filter_data, **kwargs):
 
         operator = self.scrub(kwargs.get('__operator', 'and'))
 
