@@ -202,7 +202,7 @@ class Database(object):
         conn.execute(sql, tuple(u_values + f_values, ))
         conn.commit()
 
-    def get_contraints(self) -> dict:
+    def get_constraints(self) -> dict:
         sql = ('SELECT '
                '  m.tbl_name AS table_name, '
                '  il.name AS key_name, '
@@ -300,7 +300,7 @@ class Database(object):
         Database.db_connection = conn
 
         # get database constraints
-        self.get_contraints()
+        self.get_constraints()
 
         return Database.db_connection
 
