@@ -85,7 +85,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9"]
+        python-version: ["3.10"]
         experimental: [false]
     continue-on-error: ${{ matrix.experimental }}
 
@@ -103,9 +103,18 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt -r tests/requirements-test.txt
 
-      - name: Build artifact
+      - name: Remove tests folder (Windows)
+        if: contains(matrix.os, 'windows')
+        run: |
+          Remove-Item .\tests\ -Force -Recurse
+
+      - name: Remove tests folder (Unix)
+        if: not contains(matrix.os, 'windows')
         run: |
           rm -rf ./tests/
+
+      - name: Build artifact
+        run: |
           python setup.py sdist
 
       - name: Publish package in Live Environment

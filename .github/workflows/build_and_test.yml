@@ -156,9 +156,18 @@ jobs:
         run: |
           pytest -s tests/tests.py
 
-      - name: Build artifact
+      - name: Remove tests folder (Windows)
+        if: contains(matrix.os, 'windows')
+        run: |
+          Remove-Item .\tests\ -Force -Recurse
+
+      - name: Remove tests folder (Unix)
+        if: not contains(matrix.os, 'windows')
         run: |
           rm -rf ./tests/
+
+      - name: Build artifact
+        run: |
           python setup.py sdist
 
   publish:
