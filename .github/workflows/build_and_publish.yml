@@ -89,6 +89,9 @@ jobs:
         experimental: [false]
     continue-on-error: ${{ matrix.experimental }}
 
+    permissions:
+      id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
+
     steps:
       - name: Checkout KnowsMore
         uses: actions/checkout@v3
