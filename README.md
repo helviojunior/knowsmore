@@ -94,7 +94,7 @@ https://github.com/helviojunior/knowsmore
 pip3 install --upgrade knowsmore
 ```
 
-*Note:* If you face problem with dependency version [Check the Virtual ENV file](PYVENV.md)
+*Note:* If you face problem with dependency version [Check the Virtual ENV file](https://github.com/helviojunior/knowsmore/blob/main/PYVENV.md)
 
 # Execution Flow
 
@@ -244,4 +244,4 @@ server.bolt.listen_address=0.0.0.0:7687
 
 # To do
 
-[Check the TODO file](TODO.md)
+[Check the TODO file](https://github.com/helviojunior/knowsmore/blob/main/TODO.md)
