@@ -119,8 +119,6 @@ class WordList(CmdBase):
         # Database not yet needed
         #self.db = self.open_db(args)
 
-        self.setup()
-
         return True
 
     def setup(self):
@@ -154,6 +152,8 @@ class WordList(CmdBase):
         self.unique_ch_b = int(np.sum([len(v.encode("UTF-8")) for v in self.unique_chars]))
 
     def run(self):
+
+        self.setup()
 
         estimated_size = self.calculate()
         Logger.pl(
