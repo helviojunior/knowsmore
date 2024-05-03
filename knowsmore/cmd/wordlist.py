@@ -141,6 +141,15 @@ class WordList(CmdBase):
         else:
             self.char_space = LEETS1
 
+        # Add non listed chars (and used by name) in char_space
+        self.char_space = {
+            **self.char_space,
+            **{
+                c: c for c in self.name
+                if self.char_space.get(c, None) is None
+            }
+        }
+
         self.unique_chars = set([v for l1 in [list(value) for value in self.char_space.values()] for v in l1])
         self.unique_ch_b = int(np.sum([len(v.encode("UTF-8")) for v in self.unique_chars]))
 
