@@ -46,7 +46,7 @@ def test_wordlist():
 
         wlc = WordList()
         wlc.small = False
-        wlc.name = "test"
+        wlc.name = "tst.ok"
         wlc.max_size = len(wlc.name) + 5
         wlc.min_size = 4
         wlc.setup()
