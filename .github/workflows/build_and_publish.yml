@@ -109,7 +109,7 @@ jobs:
           Remove-Item .\tests\ -Force -Recurse
 
       - name: Remove tests folder (Unix)
-        if: not contains(matrix.os, 'windows')
+        if: !contains(matrix.os, 'windows')
         run: |
           rm -rf ./tests/
 
