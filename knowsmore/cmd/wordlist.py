@@ -152,7 +152,6 @@ class WordList(CmdBase):
         self.unique_ch_b = int(np.sum([len(v.encode("UTF-8")) for v in self.unique_chars]))
 
     def run(self):
-
         self.setup()
 
         estimated_size = self.calculate()

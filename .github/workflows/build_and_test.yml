@@ -157,12 +157,12 @@ jobs:
           pytest -s tests/tests.py
 
       - name: Remove tests folder (Windows)
-        if: contains(matrix.os, 'windows')
+        if: "contains(matrix.os, 'windows')"
         run: |
           Remove-Item tests -Force -Recurse
 
       - name: Remove tests folder (Unix)
-        if: !contains(matrix.os, 'windows')
+        if: "!contains(matrix.os, 'windows')"
         run: |
           rm -rf ./tests/
 

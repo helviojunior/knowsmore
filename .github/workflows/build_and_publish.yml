@@ -104,12 +104,12 @@ jobs:
           python -m pip install -r requirements.txt -r tests/requirements-test.txt
 
       - name: Remove tests folder (Windows)
-        if: contains(matrix.os, 'windows')
+        if: "contains(matrix.os, 'windows')"
         run: |
           Remove-Item tests -Force -Recurse
 
       - name: Remove tests folder (Unix)
-        if: !contains(matrix.os, 'windows')
+        if: "!contains(matrix.os, 'windows')"
         run: |
           rm -rf ./tests/
 
