@@ -101,8 +101,9 @@ class PreComputed(CmdBase):
                                                           )
                             except Exception as e:
                                 Tools.clear_line()
-                                Logger.pl('{!} {R}error: could not parse/import line {O}%d{R} => {G}%s {W}: %s\r\n' % (count, line, str(e)))
-                                raise e
+                                if Configuration.verbose >= 3:
+                                    Logger.pl('{!} {R}error: could not parse/import line {O}%d{R} => {G}%s {W}: %s\r\n' % (count, line, str(e)))
+                                #raise e
 
                         #read next line
                         finally:

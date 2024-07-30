@@ -427,7 +427,7 @@ class NTLMHash(CmdBase):
                                     continue
 
                                 password = Password(
-                                    ntlm_hash=c1[0].lower(),
+                                    ntlm_hash=None,  # c1[0].lower(), # not use this
                                     clear_text=c1[1]
                                 )
 

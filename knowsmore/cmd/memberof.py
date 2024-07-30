@@ -85,7 +85,7 @@ class Find(CmdBase):
     def run(self):
 
         sql = (
-            'select row_number() OVER (ORDER BY g2.name, c.name) AS __line, g2.name group_name, '
+            'select row_number() OVER (ORDER BY g2.name, c.enabled DESC, c.name) AS __line, g2.name group_name, '
             'c.name, p.password, be.edge_type as "right", '
             'case when c.enabled == 1 then "Yes" ELSE "No" end user_enabled '
             'from credentials as c '
