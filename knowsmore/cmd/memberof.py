@@ -103,7 +103,7 @@ class Find(CmdBase):
         args = [f'%{self.find_text}%']
 
         if self.cracked_only:
-            sql += ' and (p.length > 0) '
+            sql += ' and (p.password <> "") '
 
         sql += ' order by g2.name, c.enabled DESC, c.name'
 

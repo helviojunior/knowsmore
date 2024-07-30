@@ -23,6 +23,7 @@ class NTLMHash(CmdBase):
         Cracked = 2
         Password = 3
         ExportHashes = 4
+        ExportCrackedHashes = 5
 
     filename = ''
     db = None
@@ -60,6 +61,13 @@ class NTLMHash(CmdBase):
                           metavar='[cracked file]',
                           type=str,
                           dest=f'crackedfile',
+                          help=Color.s('Hashcat cracked hashes filename. (format: {G}hash{R}:{G}password{W})'))
+
+        cmds.add_argument('--export-cracked',
+                          action='store',
+                          metavar='[cracked file]',
+                          type=str,
+                          dest=f'export_cracked_file',
                           help=Color.s('Hashcat cracked hashes filename. (format: {G}hash{R}:{G}password{W})'))
 
         cmds.add_argument('--add-password',
@@ -101,6 +109,25 @@ class NTLMHash(CmdBase):
 
             self.mode = NTLMHash.ImportMode.ExportHashes
             self.filename = args.export_file
+
+        elif args.export_cracked_file is not None and args.export_cracked_file != '':
+            try:
+                with open(args.export_cracked_file, 'a') as f:
+                    # file opened for writing. write to it here
+                    pass
+            except IOError as x:
+                if x.errno == errno.EACCES:
+                    Logger.pl('{!} {R}error: could not open NTLM hashes file {O}permission denied{R}{W}\r\n')
+                    Tools.exit_gracefully(1)
+                elif x.errno == errno.EISDIR:
+                    Logger.pl('{!} {R}error: could not open NTLM hashes file {O}it is an directory{R}{W}\r\n')
+                    Tools.exit_gracefully(1)
+                else:
+                    Logger.pl('{!} {R}error: could not open NTLM hashes file {W}\r\n')
+                    Tools.exit_gracefully(1)
+
+            self.mode = NTLMHash.ImportMode.ExportCrackedHashes
+            self.filename = args.export_cracked_file
 
         else:
             if (args.ntlmfile is None or args.ntlmfile.strip() == '') and \
@@ -164,9 +191,12 @@ class NTLMHash(CmdBase):
         return True
 
     def run(self):
-        if self.mode == NTLMHash.ImportMode.ExportHashes:
+        if self.mode in [NTLMHash.ImportMode.ExportHashes, NTLMHash.ImportMode.ExportCrackedHashes]:
+            sql = 'select distinct p.ntlm_hash, p.password from passwords p'
+            if self.mode == NTLMHash.ImportMode.ExportCrackedHashes:
+                sql += ' where p.password <> ""'
             rows = self.db.select_raw(
-                sql='select distinct ntlm_hash from passwords',
+                sql=sql,
                 args=[]
             )
 
@@ -175,7 +205,10 @@ class NTLMHash(CmdBase):
             try:
                 with open(self.filename, 'w', encoding="UTF-8") as f:
                     for row in rows:
-                        f.write(f'{row["ntlm_hash"]}\n')
+                        if self.mode == NTLMHash.ImportMode.ExportCrackedHashes:
+                            f.write(f'{row["ntlm_hash"]}:{row["password"]}\n')
+                        else:
+                            f.write(f'{row["ntlm_hash"]}\n')
                     pass
             except KeyboardInterrupt as e:
                 raise e
