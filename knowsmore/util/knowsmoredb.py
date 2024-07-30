@@ -180,7 +180,9 @@ class KnowsMoreDB(Database):
     def insert_or_update_credential(self, domain: int, username: str, ntlm_hash: str,
                                     dn: str = '', groups: str = '', object_identifier: str = '',
                                     type: str = 'U', full_name: str = '', enabled: bool = True,
-                                    pwd_last_set: datetime.datetime = datetime.datetime(1970, 1, 1, 0, 0, 0, 0)):
+                                    pwd_last_set: datetime.datetime = datetime.datetime(1970, 1, 1, 0, 0, 0, 0),
+                                    exclude_on_update: list = None
+                                    ):
         try:
 
             # Hard-coded empty password
@@ -219,8 +221,12 @@ class KnowsMoreDB(Database):
             if pwd_last_set is not None and pwd_last_set.year > 1970:
                 data['pwd_last_set'] = pwd_last_set
 
+            ex = ['password_id'] if not update_password else []
+            if exclude_on_update is not None and isinstance(exclude_on_update, list):
+                ex += [str(x) for x in exclude_on_update]
+
             self.insert_update_one_exclude('credentials',
-                                           exclude_on_update=['password_id'] if not update_password else [],
+                                           exclude_on_update=exclude_on_update,
                                            **data)
 
         except Exception as e:

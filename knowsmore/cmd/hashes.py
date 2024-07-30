@@ -346,6 +346,8 @@ class NTLMHash(CmdBase):
                                 username=usr,
                                 ntlm_hash=hash,
                                 type=type,
+                                exclude_on_update=["object_identifier", "dn", "groups",
+                                                   "enabled", "full_name"]
                             )
 
                             # check if exists at pre computed hashes
@@ -403,6 +405,12 @@ class NTLMHash(CmdBase):
                     exit(0)
                 print(' ')
 
+            Logger.pl('{+} {W}Calculating company\'s name Leets{W}')
+            if len(Configuration.company) > 0:
+                for n in Configuration.company:
+                    Password.leets_cache[n] = [l1 for l1 in Password.get_leets(n)]
+
+            Logger.pl('{+} {W}Importing...{W}')
             total = Tools.count_file_lines(self.filename)
             with progress.Bar(label=" Processing ", expected_size=total) as bar:
                 try:
@@ -426,39 +434,42 @@ class NTLMHash(CmdBase):
                                 if c1[0] == '':
                                     continue
 
-                                password = Password(
-                                    ntlm_hash=None,  # c1[0].lower(), # not use this
-                                    clear_text=c1[1]
-                                )
+                                try:
+                                    password = Password(
+                                        ntlm_hash=None,  # c1[0].lower(), # not use this
+                                        clear_text=c1[1]
+                                    )
 
-                                #verify if exists
-                                pwd = self.db.select('passwords',
-                                                     ntlm_hash=password.ntlm_hash
-                                                     )
+                                    #verify if exists
+                                    pwd = self.db.select('passwords',
+                                                         ntlm_hash=password.ntlm_hash
+                                                         )
 
-                                if len(pwd) == 0:
-                                    # insert just at pre_computed
-                                    self.db.insert_ignore_one('pre_computed',
-                                                              ntlm_hash=password.ntlm_hash,
-                                                              md5_hash=password.md5_hash,
-                                                              sha1_hash=password.sha1_hash,
-                                                              sha256_hash=password.sha256_hash,
-                                                              sha512_hash=password.sha512_hash,
-                                                              password=password.clear_text,
-                                                              )
-                                    continue
+                                    if len(pwd) == 0:
+                                        # insert just at pre_computed
+                                        self.db.insert_ignore_one('pre_computed',
+                                                                  ntlm_hash=password.ntlm_hash,
+                                                                  md5_hash=password.md5_hash,
+                                                                  sha1_hash=password.sha1_hash,
+                                                                  sha256_hash=password.sha256_hash,
+                                                                  sha512_hash=password.sha512_hash,
+                                                                  password=password.clear_text
+                                                                  )
+                                        continue
 
-                                pdata = {}
+                                    pdata = {}
 
-                                if len(Configuration.company) > 0:
-                                    pdata['company_similarity'] = sorted(
-                                        [password.calc_ratio(n1, 0.4) for n1 in Configuration.company]
-                                    )[-1]
+                                    if len(Configuration.company) > 0:
+                                        pdata['company_similarity'] = sorted(
+                                            [password.calc_ratio(n1, 0.4) for n1 in Configuration.company]
+                                        )[-1]
 
-                                self.db.update_password(
-                                    password,
-                                    **pdata
-                                )
+                                    self.db.update_password(
+                                        password,
+                                        **pdata
+                                    )
+                                except Exception as e:
+                                    print(e)
 
                             #read next line
                             finally:

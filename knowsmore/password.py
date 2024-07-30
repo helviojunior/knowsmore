@@ -155,7 +155,8 @@ class Password(object):
 
         return int(round((f(self.entropy - self.weak_bits) * float(100)), 0))  # with offset
 
-    def get_leets(self, word, index=0) -> list:
+    @classmethod
+    def get_leets(cls, word, index=0) -> list:
         if index == 0:
             word = word.lower()
         c = word[index:index + 1]
@@ -166,7 +167,7 @@ class Password(object):
                     yield p
                 else:
                     p = "%s%s%s" % (word[0:index], s, word[index + 1:])
-                    yield from self.get_leets(p, index + 1)
+                    yield from cls.get_leets(p, index + 1)
 
     def calc_ratio(self, name: str, score_cutoff: float = 0.0) -> int:
         if len(name) == 0:
@@ -187,7 +188,11 @@ class Password(object):
 
         # Use a static cache to increase speed
         if name not in Password.leets_cache.keys():
-            Password.leets_cache[name] = [l1 for l1 in self.get_leets(name)]
+            # Permit up to 6 digits
+            if len(name) >= 6:
+                Password.leets_cache[name] = [name, name.lower(), name.upper()]
+            else:
+                Password.leets_cache[name] = [l1 for l1 in self.get_leets(name)]
 
         l1 = sorted(
             [
