@@ -199,3 +199,11 @@ class Tools:
             return base64.b64encode(obj).decode("UTF-8")
 
         raise TypeError("Type %s not serializable" % type(obj))
+
+    @staticmethod
+    def escape_ansi(text):
+        if text is None:
+            return ''
+
+        pattern = re.compile(r'(\x9B|\x1B\[)[0-?]*[ -/]*[@-~]')
+        return pattern.sub('', text)

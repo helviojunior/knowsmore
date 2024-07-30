@@ -23,6 +23,7 @@ class Credentials(CmdBase):
     db = None
     out_file = None
     out_path = None
+    out_file_json = None
 
     def __init__(self):
         super().__init__('credentials', 'Show cracked credentials')
@@ -32,6 +33,13 @@ class Credentials(CmdBase):
                            action='store',
                            default='',
                            dest=f'out_file',
+                           help=Color.s(
+                               'Output file to save TXT file'))
+
+        flags.add_argument('--save-to-json',
+                           action='store',
+                           default='',
+                           dest=f'out_file_json',
                            help=Color.s(
                                'Output file to save JSON data'))
 
@@ -49,6 +57,15 @@ class Credentials(CmdBase):
 
         if args.out_file is not None and args.out_file.strip() != '':
             self.out_file = Path(args.out_file).absolute()
+
+        if self.out_file is not None:
+            if os.path.exists(self.out_file):
+                Logger.pl('{!} {R}error: out file ({O}%s{R}) already exists {W}\r\n' % (
+                    self.out_file))
+                exit(1)
+
+        if args.out_file_json is not None and args.out_file_json.strip() != '':
+            self.out_file_json = Path(args.out_file_json).absolute()
 
         if self.out_file is not None:
             if os.path.exists(self.out_file):
@@ -95,10 +112,10 @@ class Credentials(CmdBase):
                     'rows': rows
                 })
 
-        if self.out_file is not None:
-            Color.pl('{?} {W}{D}Credentials saved at {W}{C}%s{W}{D}{W}' % self.out_file)
+        if self.out_file_json is not None:
+            Color.pl('{?} {W}{D}Credentials saved at {W}{C}%s{W}{D}{W}' % self.out_file_json)
 
-            with open(self.out_file, "a", encoding="UTF-8") as text_file:
+            with open(self.out_file_json, "a", encoding="UTF-8") as text_file:
                 text_file.write(json.dumps(
                     {
                         'data': data,
@@ -110,7 +127,7 @@ class Credentials(CmdBase):
                     }
                 ))
 
-        elif self.out_path is not None:
+        elif self.out_path is not None or self.out_file is not None:
 
             for i, d in enumerate(data):
                 name = f"{i:03}_{Tools.sanitize_filename(d['description'])}"
@@ -129,15 +146,25 @@ class Credentials(CmdBase):
                 else:
                     file_data += Tools.get_ansi_tabulated(d['rows'])
 
-                o = Ansi2Image(0, 0, font_name=Ansi2Image.get_default_font_name(), font_size=13)
-                o.loads(file_data)
-                o.min_margin = 10
-                o.max_margin = 30
-                o.calc_size(margin=0.01)
-                o.save_image(os.path.join(self.out_path, f'{name}.png'), format='PNG')
+                if self.out_path is not None:
+                    o = Ansi2Image(0, 0, font_name=Ansi2Image.get_default_font_name(), font_size=13)
+                    o.loads(file_data)
+                    o.min_margin = 10
+                    o.max_margin = 30
+                    o.calc_size(margin=0.01)
+                    o.save_image(os.path.join(self.out_path, f'{name}.png'), format='PNG')
 
-                #with open(os.path.join(self.out_path, f'{name}.ansi.txt'), 'wb') as f:
-                #    f.write(file_data.encode('utf-8', 'ignore'))
+                if self.out_file is not None:
+                    name = str(self.out_file).replace(Path(self.out_file).suffix, "").rstrip(". ")
+
+                    with open(f'{name}.ansi.txt', 'ab') as f:
+                        f.write(file_data.encode('utf-8', 'ignore'))
+                        f.write(b"\n\n")
+
+                    with open(f'{name}.txt', 'ab') as f:
+                        f.write(f"{d['description']}\n".encode('utf-8', 'ignore'))
+                        f.write(Tools.get_tabulated(d['rows']).encode('utf-8', 'ignore'))
+                        f.write(b"\n\n")
 
         else:
 
