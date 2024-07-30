@@ -405,7 +405,7 @@ class NTLMHash(CmdBase):
                     exit(0)
                 print(' ')
 
-            Logger.pl('{+} {W}Calculating company\'s name Leets{W}')
+            Logger.pl('{+} {W}Calculating company\'s name leets{W}')
             if len(Configuration.company) > 0:
                 for n in Configuration.company:
                     Password.leets_cache[n] = [l1 for l1 in Password.get_leets(n)]
