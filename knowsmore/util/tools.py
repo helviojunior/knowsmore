@@ -117,12 +117,35 @@ class Tools:
         return str(text).strip()
 
     @staticmethod
-    def get_tabulated(data: list) -> str:
+    def get_tabulated(data: list, labels: dict = None) -> str:
 
         if len(data) == 0:
             return ''
 
-        headers = [(h if len(h) > 2 and h[0:2] != '__' else ' ') for h in data[0].keys()]
+        i_labels = dict(
+            password="Password",
+            qty="Quantity",
+            score="Score",
+            company_similarity="Company Similarity",
+            users="Users",
+            machines="Machines",
+            description="Description",
+            group_name="Group",
+            name="Username",
+            right="Right"
+        )
+
+        if labels is not None or isinstance(labels, dict):
+            i_labels = {**i_labels, **labels}
+
+        headers = [
+            (next(iter([
+                v
+                for k, v in i_labels.items()
+                if h.lower() == str(k).lower()
+            ]), h) if len(h) > 2 and h[0:2] != '__' else ' ')
+            for h in data[0].keys()
+        ]
         data = [item.values() for item in data]
 
         return tabulate(data, headers, tablefmt='psql')

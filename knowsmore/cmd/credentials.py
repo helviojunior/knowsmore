@@ -157,11 +157,11 @@ class Credentials(CmdBase):
                 if self.out_file is not None:
                     name = str(self.out_file).replace(Path(self.out_file).suffix, "").rstrip(". ")
 
-                    with open(f'{name}.ansi.txt', 'ab') as f:
+                    with open(f'{name}.ansi.txt', 'ab+') as f:
                         f.write(file_data.encode('utf-8', 'ignore'))
                         f.write(b"\n\n")
 
-                    with open(f'{name}.txt', 'ab') as f:
+                    with open(f'{name}.txt', 'ab+') as f:
                         f.write(f"{d['description']}\n".encode('utf-8', 'ignore'))
                         f.write(Tools.get_tabulated(d['rows']).encode('utf-8', 'ignore'))
                         f.write(b"\n\n")

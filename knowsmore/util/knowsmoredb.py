@@ -185,7 +185,7 @@ class KnowsMoreDB(Database):
 
             # Hard-coded empty password
             update_password = True
-            if ntlm_hash is None or ntlm_hash.strip == '':
+            if ntlm_hash is None or ntlm_hash.strip() == '':
                 update_password = False
                 ntlm_hash = '31d6cfe0d16ae931b73c59d7e0c089c0'
 
