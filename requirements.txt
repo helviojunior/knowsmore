@@ -1,6 +1,6 @@
 urllib3<2.0
 requests>=2.27.1
-bs4>=0.0.1
+beautifulsoup4>=4
 colorama
 clint>=0.5.1
 tabulate>=0.8.0
