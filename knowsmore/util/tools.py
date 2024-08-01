@@ -230,3 +230,18 @@ class Tools:
 
         pattern = re.compile(r'(\x9B|\x1B\[)[0-?]*[ -/]*[@-~]')
         return pattern.sub('', text)
+
+    @staticmethod
+    def print_error(error: Exception, force: bool = False):
+        from knowsmore.config import Configuration
+        Color.pl('\n{!} {R}Error:{O} %s{W}' % str(error))
+
+        if Configuration.verbose >= 2 or force:
+            Color.pl('\n{!} {O}Full stack trace below')
+            from traceback import format_exc
+            Color.p('\n{!}    ')
+            err = format_exc().strip()
+            err = err.replace('\n', '\n{W}{!} {W}   ')
+            err = err.replace('  File', '{W}{D}File')
+            err = err.replace('  Exception: ', '{R}Exception: {O}')
+            Color.pl(err + '{W}')

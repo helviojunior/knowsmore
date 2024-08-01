@@ -8,6 +8,8 @@ import json
 import hashlib
 from sqlite3 import Connection, OperationalError, IntegrityError, ProgrammingError
 
+from knowsmore.util.tools import Tools
+
 from .color import Color
 from .database import Database
 from ..password import Password
@@ -56,6 +58,11 @@ class KnowsMoreDB(Database):
                                members=members,
                                membership=membership
                                )
+
+    def pe(self, error):
+        from knowsmore.config import Configuration
+        if Configuration.verbose >= 3:
+            Tools.print_error(error)
 
     def update_password(self, password: Password, **kwargs):
 
@@ -226,11 +233,12 @@ class KnowsMoreDB(Database):
                 ex += [str(x) for x in exclude_on_update]
 
             self.insert_update_one_exclude('credentials',
-                                           exclude_on_update=exclude_on_update,
+                                           exclude_on_update=ex,
                                            **data)
 
         except Exception as e:
             Color.pl('{!} {R}Error inserting credential data:{O} %s{W}' % str(e))
+            self.pe(e)
         pass
 
     def insert_or_get_domain(self, domain: str, dn: str = '', object_identifier: str = '') -> int:

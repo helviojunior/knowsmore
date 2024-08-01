@@ -165,8 +165,13 @@ class Bloodhound(CmdBase):
                 return session.execute_read(self._get_owned)
 
         def set_owned(self, source_filter_type: str, source_label: str, source:str, owned: bool = True):
-            with self.driver.session(database=self.database) as session:
-                return session.execute_write(self._set_owned, source_filter_type, source_label, source, owned)
+
+            if self.version.major >= 5:
+                with self.driver.session(database=self.database) as session:
+                    session.execute_write(self._set_owned, source_filter_type, source_label, source, owned)
+            else:
+                with self.driver.session(database=self.database) as session:
+                    session.write_transaction(self._set_owned, source_filter_type, source_label, source, owned)
 
         def get_session(self) -> Session:
             return self.driver.session(database=self.database)
@@ -544,7 +549,7 @@ class Bloodhound(CmdBase):
                 'on c.password_id  = p.password_id  '
                 'inner join domains as d '
                 'on c.domain_id = d.domain_id  '
-                'where p.length > 0',
+                'where p.password <> ""',
             args=[]
         )
 
@@ -578,6 +583,9 @@ class Bloodhound(CmdBase):
                 finally:
                     bar.hide = True
                     Tools.clear_line()
+
+        else:
+            Color.pl('{!} {O}Has none owned objects{W}')
 
     def run(self):
 
