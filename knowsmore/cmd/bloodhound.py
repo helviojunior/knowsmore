@@ -52,6 +52,7 @@ class Bloodhound(CmdBase):
     mode = ImportMode.Undefined
     synced = []
     tasks = 6
+    force = False
 
     class BloodhoundFile:
         file_name = None
@@ -351,6 +352,12 @@ class Bloodhound(CmdBase):
                            dest=f'neo4j_database',
                            help=Color.s('Neo4j Database to mark host/users as owned. (default: neo4j)'))
 
+        flags.add_argument('--force',
+                           action='store_true',
+                           default=False,
+                           dest=f'force',
+                           help=Color.s('Enable group chain calculation.'))
+
     def add_commands(self, cmds: _ArgumentGroup):
         cmds.add_argument('--import-data',
                           action='store',
@@ -379,6 +386,7 @@ class Bloodhound(CmdBase):
 
             host = args.neo4j_host
             self.mode = Bloodhound.ImportMode.MarkOwned
+            self.force = args.force
 
             if args.neo4j_host2 is not None and args.neo4j_host2 != '':
                 self.mode = Bloodhound.ImportMode.Sync
@@ -601,6 +609,20 @@ class Bloodhound(CmdBase):
                 Tools.exit_gracefully(1)
 
             Color.pl('{?} {W}{D}Syncing objects...{W}')
+
+            if self.force:
+                self.db.update(
+                    'bloodhound_objects',
+                    filter_data={},
+                    sync_date=datetime.datetime.now() - datetime.timedelta(seconds=60),
+                    updated_date=datetime.datetime.now()
+                )
+                self.db.update(
+                    'bloodhound_edge',
+                    filter_data={},
+                    sync_date=datetime.datetime.now() - datetime.timedelta(seconds=60),
+                    updated_date=datetime.datetime.now()
+                )
 
             db_sync_count = self.db.select_raw(
                 sql='select count(*) as qty from bloodhound_objects '
