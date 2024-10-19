@@ -77,15 +77,19 @@ class Stats(CmdBase):
         stats1 = self.db.select_raw(
             sql='select 1 as __line, "Total Users" as description, (select count(*) from credentials where type = "U") as qty '
                 'union '
-                'select 2 as __line, "Total Machines" as description, (select count(*) from credentials where type = "M") as qty '
+                'select 2 as __line, "Enabled Users" as description, (select count(*) from credentials where type = "U" and enabled = 1) as qty '
                 'union '
-                'select 3 as __line, "Unique Hashes" as description, (select count(distinct ntlm_hash) from passwords) as qty '
+                'select 3 as __line, "Total Machines" as description, (select count(*) from credentials where type = "M") as qty '
                 'union '
-                'select 4 as __line, "Cracked Hashes" as description, (select count(distinct ntlm_hash) from passwords where length > 0) as qty '
+                'select 4 as __line, "Unique Hashes" as description, (select count(distinct ntlm_hash) from passwords) as qty '
                 'union '
-                'select 5 as __line, "Cracked Users" as description, (select count(distinct c.credential_id) from credentials as c inner join passwords as p on c.password_id = p.password_id where p.length > 0 and c.type = "U") as qty '
+                'select 5 as __line, "Cracked Hashes" as description, (select count(distinct ntlm_hash) from passwords where length > 0) as qty '
                 'union '
-                'select 6 as __line, "Cracked Machines credentials" as description, (select count(distinct c.credential_id) from credentials as c inner join passwords as p on c.password_id = p.password_id where p.length > 0 and c.type = "M") as qty',
+                'select 6 as __line, "Cracked Users" as description, (select count(distinct c.credential_id) from credentials as c inner join passwords as p on c.password_id = p.password_id where p.length > 0 and c.type = "U") as qty '
+                'union '
+                'select 7 as __line, "Cracked Enabled Users" as description, (select count(distinct c.credential_id) from credentials as c inner join passwords as p on c.password_id = p.password_id where p.length > 0 and c.type = "U" and c.enabled = 1) as qty '
+                'union '
+                'select 8 as __line, "Cracked Machines credentials" as description, (select count(distinct c.credential_id) from credentials as c inner join passwords as p on c.password_id = p.password_id where p.length > 0 and c.type = "M") as qty',
             args=[]
         )
         data.append({
@@ -168,6 +172,28 @@ class Stats(CmdBase):
                 'rows': rows_general
             })
 
+        # General Top 10 (Enabled credential)
+        rows_general = self.db.select_raw(
+            sql='select row_number() OVER (ORDER BY count(distinct c.credential_id) DESC) AS __line, p.password, count(distinct c.credential_id) as qty '
+                'from credentials as c '
+                'inner join passwords as p '
+                'on c.password_id = p.password_id '
+                'where p.password <> "" '
+                'and c.enabled = 1 '
+                'group by p.password, c.enabled '
+                'order by qty desc '
+                'LIMIT 10',
+            args=[]
+        )
+
+        if len(rows_general) > 0:
+            data.append({
+                'type': 'top10_enabled',
+                'domain': 'all',
+                'description': 'General Top 10 passwords (enabled credential)',
+                'rows': rows_general
+            })
+
         # Company variation
         rows_v1 = self.db.select_raw(
             sql='select row_number() OVER (ORDER BY count(distinct c.credential_id) DESC) AS __line, p.password, round(count(distinct c.credential_id) * log(p.company_similarity, 2)) as score, p.company_similarity, count(distinct c.credential_id) as qty '
@@ -186,6 +212,28 @@ class Stats(CmdBase):
                 'type': 'top10_by_company_name_similarity',
                 'domain': 'all',
                 'description': 'Top 10 weak passwords by company name similarity',
+                'rows': rows_v1
+            })
+
+        # Company variation (enabled credential)
+        rows_v1 = self.db.select_raw(
+            sql='select row_number() OVER (ORDER BY count(distinct c.credential_id) DESC) AS __line, p.password, round(count(distinct c.credential_id) * log(p.company_similarity, 2)) as score, p.company_similarity, count(distinct c.credential_id) as qty '
+                'from credentials as c '
+                'inner join passwords as p '
+                'on c.password_id = p.password_id '
+                'where p.length > 0 and p.company_similarity > 40 '
+                'and c.enabled = 1 '
+                'and p.company_similarity >= (select ifnull(avg(p1.company_similarity),0) as v1 from passwords as p1 where p1.company_similarity > 0) '
+                'group by p.password, p.company_similarity, c.enabled '
+                'order by score desc '
+                'LIMIT 10',
+            args=[]
+        )
+        if len(rows_v1) > 0:
+            data.append({
+                'type': 'top10_by_company_name_similarity_enabled',
+                'domain': 'all',
+                'description': 'Top 10 weak passwords by company name similarity (enabled credential)',
                 'rows': rows_v1
             })
 

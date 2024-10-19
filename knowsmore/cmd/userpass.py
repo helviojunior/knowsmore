@@ -115,7 +115,7 @@ class UserPass(CmdBase):
 
         self.db.insert_password_manually(self.password, **pdata)
         if pwd is None:
-            pwd = self.db.select('passwords', ntlm_hash=self.password.ntlm_hash)
+            pwd = self.db.select_first('passwords', ntlm_hash=self.password.ntlm_hash)
 
         self.db.update('credentials', filter_data=dict(credential_id=credential_id), password_id=pwd['password_id'])
 
