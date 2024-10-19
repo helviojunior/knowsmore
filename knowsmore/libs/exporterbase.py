@@ -4,7 +4,7 @@ from datetime import datetime, timezone, timedelta
 from knowsmore.password import Password
 
 from knowsmore.util.knowsmoredb import KnowsMoreDB
-
+from knowsmore.util.tools import Tools
 
 class ExporterBase(KnowsMoreDB):
 
@@ -56,8 +56,7 @@ class ExporterBase(KnowsMoreDB):
                 p1 = Password('', p)
                 r['password'] = p1.latin_clear_text
 
-            dt = datetime.strptime(str( r['insert_date']), '%Y-%m-%d %H:%M:%S')
-            dt.astimezone(timezone(timedelta(hours=0), 'Z'))
+            dt = datetime.strptime(str(r['insert_date']), '%Y-%m-%d %H:%M:%S')
 
             properties = dict(
                     name=r['name'],
@@ -80,15 +79,15 @@ class ExporterBase(KnowsMoreDB):
             )
 
             if export_password:
-                pwd['password'] = r['password'],
-                pwd['md5_hash'] = r['md5_hash'],
-                pwd['sha1_hash'] = r['sha1_hash'],
-                pwd['sha256_hash'] = r['sha256_hash'],
+                pwd['clear_text'] = r['password']
+                pwd['md5_hash'] = r['md5_hash']
+                pwd['sha1_hash'] = r['sha1_hash']
+                pwd['sha256_hash'] = r['sha256_hash']
                 pwd['sha512_hash'] = r['sha512_hash']
 
             bh = []
             if r['object_identifier'] is not None and r['object_identifier'].strip() != '':
-                bh_objects = self.db.select(
+                bh_objects = self.select(
                     'bloodhound_objects',
                     object_id=r['object_identifier']
                 )
@@ -108,6 +107,16 @@ class ExporterBase(KnowsMoreDB):
                         properties['displayname'] = props.get('displayname', None)
                     except:
                         pass
+
+                    if isinstance(dt, int):
+                        dt = datetime(1970, 1, 1, 0, 0, 0, tzinfo=None) + timedelta(seconds=dt)
+
+                    for k in ["lastlogon", "pwdlastset"]:
+                        try:
+                            if properties.get(k, None) is not None and isinstance(properties[k], int):
+                                properties[k] = datetime(1970, 1, 1, 0, 0, 0, tzinfo=None) + timedelta(seconds=int(properties[k]))
+                        except:
+                            pass
 
                     bh.append(
                         dict(

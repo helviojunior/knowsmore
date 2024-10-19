@@ -26,7 +26,6 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 
 class Splunk(CmdBase):
-    db = None
     url_base = None
     url_path = '/services/collector/event'
     token_base = None
@@ -140,7 +139,7 @@ class Splunk(CmdBase):
                             'Content-Type': 'application/json'
                     }
                     dict_payload = dict(event=entry)
-                    json_payload = json.dumps(dict_payload)
+                    json_payload = json.dumps(dict_payload, default=Tools.json_serial)
                     try:
                         response = requests.request("POST", url, headers=headers, data=json_payload, verify=False)
                         response.raise_for_status()

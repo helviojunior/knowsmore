@@ -216,6 +216,7 @@ class Tools:
         """JSON serializer for objects not serializable by default json code"""
 
         if isinstance(obj, (datetime.datetime, datetime.date)):
+            #obj = obj.astimezone(datetime.timezone(datetime.timedelta(hours=0), 'Z'))
             return obj.strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
         if isinstance(obj, bytes):
