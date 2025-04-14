@@ -185,6 +185,8 @@ class WordList(CmdBase):
                     )
                 elif self.level == 1:
                     return
+            else:
+                return
 
 
     def run(self):
