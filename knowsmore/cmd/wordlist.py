@@ -139,6 +139,10 @@ class WordList(CmdBase):
         else:
             self.char_space = LEETS1
 
+        self.setup_calc()
+
+
+    def setup_calc(self):
         # Add non listed chars (and used by name) in char_space
         self.char_space = {
             **self.char_space,
@@ -151,8 +155,42 @@ class WordList(CmdBase):
         self.unique_chars = set([v for l1 in [list(value) for value in self.char_space.values()] for v in l1])
         self.unique_ch_b = int(np.sum([len(v.encode("UTF-8")) for v in self.unique_chars]))
 
+    def optmize_charspace(self):
+
+        if self.no_leets: # There is nothing to do
+            return
+
+        stat = shutil.disk_usage(Path(self.filename).parent)
+
+        for t in range(4):
+            estimated_size = self.calculate()
+            if stat.free/1024 < estimated_size + (estimated_size * 0.2):
+                if self.level >= 3:
+                    self.level = 2
+                    self.char_space = LEETS3
+                    self.setup_calc()
+                    Logger.pl(
+                        '{*} {W}Estimated amount of data is too big, reducing char space...{W}.'
+                    )
+                elif self.level == 2:
+                    self.level = 1
+                    fc = self.name.lower()[0:1]
+                    self.char_space = {
+                        k: v if k != fc else (v if k not in LEETS3 else LEETS3[k])
+                        for k, v in LEETS2.items()
+                        }
+                    self.setup_calc()
+                    Logger.pl(
+                        '{*} {W}Estimated amount of data is too big, reducing char space...{W}.'
+                    )
+                elif self.level == 1:
+                    return
+
+
     def run(self):
         self.setup()
+
+        self.optmize_charspace()
 
         estimated_size = self.calculate()
         Logger.pl(
