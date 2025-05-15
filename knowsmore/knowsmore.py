@@ -62,16 +62,7 @@ class KnowsMore(object):
             Configuration.module.run()
 
         except Exception as e:
-            Color.pl("\n{!} {R}Error: {O}%s" % str(e))
-            if Configuration.verbose > 0 or True:
-                Color.pl('\n{!} {O}Full stack trace below')
-                from traceback import format_exc
-                Color.p('\n{!}    ')
-                err = format_exc().strip()
-                err = err.replace('\n', '\n{W}{!} {W}   ')
-                err = err.replace('  File', '{W}{D}File')
-                err = err.replace('  Exception: ', '{R}Exception: {O}')
-                Color.pl(err)
+            raise e
         except KeyboardInterrupt as e:
             raise e
 
@@ -110,7 +101,9 @@ def run():
 
         Color.pl('\n{!} {R}Exiting{W}\n')
 
+        Tools.exit_gracefully(2)
     except KeyboardInterrupt:
         Color.pl('\n{!} {O}interrupted, shutting down...{W}')
+        Tools.exit_gracefully(3)
 
-    Tools.exit_gracefully(2)
+    Tools.exit_gracefully(0)
