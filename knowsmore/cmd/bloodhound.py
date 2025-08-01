@@ -1479,16 +1479,38 @@ class Bloodhound(CmdBase):
                             )
 
                         for entry in Tools.get_dict_value(user, 'AllowedToDelegate', []):
-                            self.db.insert_or_update_bloodhound_edge(
-                                source=oid,
-                                target=entry,
-                                source_label='User',
-                                target_label='Computer',
-                                edge_type='AllowedToDelegate',
-                                edge_props='{isacl: false}',
-                                filter_type='objectid',
-                                props=dict(source=oid, target=entry)
-                            )
+                            e1 = entry
+                            target_label = 'Computer'
+                            if isinstance(entry, dict) and entry.get('ObjectIdentifier', None) is not None:
+                                e1 = entry.get('ObjectIdentifier', '')
+
+                            if isinstance(entry, dict) and entry.get('ObjectType', None) is not None:
+                                target_label = entry.get('ObjectType', '')
+
+                            try:
+                                self.db.insert_or_update_bloodhound_edge(
+                                    source=oid,
+                                    target=e1,
+                                    source_label='User',
+                                    target_label=target_label,
+                                    edge_type='AllowedToDelegate',
+                                    edge_props='{isacl: false}',
+                                    filter_type='objectid',
+                                    props=dict(source=oid, target=e1)
+                                )
+                            except Exception as e1:
+                                print(dict(
+                                    raw_entry=entry,
+                                    source=oid,
+                                    target=e1,
+                                    source_label='User',
+                                    target_label=target_label,
+                                    edge_type='AllowedToDelegate',
+                                    edge_props='{isacl: false}',
+                                    filter_type='objectid',
+                                    props=dict(source=oid, target=e1)
+                                ))
+                                Tools.print_error(e1)
 
                         # TODO add HasSIDHistory objects
 
