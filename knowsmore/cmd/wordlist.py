@@ -289,8 +289,7 @@ class WordList(CmdBase):
                     p = "%s%s" % (word[0:index], s)
                     if (len(p) < self.min_size or self.increment) and self.padding:
                         yield from self.add_padding(p)
-                    else:
-                        yield p
+                    yield p
                     yield from self.add_common(p)
                 else:
                     p = "%s%s%s" % (word[0:index], s, word[index + 1:])
