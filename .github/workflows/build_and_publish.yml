@@ -116,6 +116,13 @@ jobs:
         run: |
           rm -rf ./tests/
 
+      - name: Change Package version
+        run: |
+          VER=$(echo '${{ github.event.release.tag_name }}' | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
+          GITHASH=$(git rev-parse --short HEAD)
+          meta=$(cat knowsmore/__meta__.py | sed "s/__version__.*/__version__ = '"${VER}"'/" | sed "s/__build__.*/__build__ = 0x"${GITHASH}"/")
+          echo "$meta" > knowsmore/__meta__.py
+
       - name: Build artifact
         run: |
           python setup.py sdist

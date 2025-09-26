@@ -1,4 +1,4 @@
-__version__ = '0.1.47'
+__version__ = '0.0.0'
 __title__ = "knowsmore"
 __description__ = "KnowsMore is a swiss army knife tool for pentesting Microsoft Active Directory (NTLM Hashes, BloodHound, NTDS and DCSync)."
 __url__ = "https://github.com/helviojunior/knowsmore"
