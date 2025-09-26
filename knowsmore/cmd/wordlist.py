@@ -38,6 +38,7 @@ class WordList(CmdBase):
     max_size = 32
     level = 3
     padding = False
+    increment = False
     no_leets = False
     small = False
     unique_chars = []
@@ -72,10 +73,12 @@ class WordList(CmdBase):
                           help=Color.s('Write generate wordlist to a file'))
         cmds.add_argument('-min', '--min-lenght', default=1, type=int, dest='min_lenght',
                           help='Minumin word lenght')
-        cmds.add_argument('-max', '--max-lenght', default=32, type=int, dest='max_lenght',
+        cmds.add_argument('-max', '--max-lenght', default=-1, type=int, dest='max_lenght',
                           help='Maximum word lenght.')
         cmds.add_argument('-p', '--padding', action='store_true',  dest='padding', default=False,
                           help='Add padding to fill string to match minimun leght')
+        cmds.add_argument('-i', '--increment', action='store_true',  dest='increment', default=False,
+                          help='Add padding (one by one) to fill string to match maximum leght')
         cmds.add_argument('-nol', '--no-leets', action='store_true', dest='no_leets', default=False,
                           help='No Leets')
         cmds.add_argument('-l', '--level', default=3, type=int, dest='level',
@@ -94,8 +97,13 @@ class WordList(CmdBase):
 
         self.name = args.name
         self.min_size = int(args.min_lenght)
-        self.max_size = int(args.max_lenght)
-        self.padding = args.padding
+        if args.max_lenght > self.min_size:
+            self.max_size = int(args.max_lenght)
+            self.increment = args.increment  # Just mark this if --max-lenght had set
+        else:
+            self.max_size = 32  # Default value
+        
+        self.padding = args.padding or self.increment
         self.no_leets = args.no_leets
         self.batch = args.batch
         self.append_file = args.append_file
@@ -234,23 +242,30 @@ class WordList(CmdBase):
 
         s = len(self.name)
         leet_lines = np.prod([len([chars for chars in self.char_space.get(c)]) for c in self.name])
-        padding_space = 0
-        if len(self.name) < self.min_size and self.padding:
-            s1 = self.min_size - len(self.name)
-            if s1 > 0:
-                pl = math.pow(len(self.unique_chars), s1)
-                padding_space = (
-                    ((pl * leet_lines) * (s1 + s + 1))
-                    + (math.pow(self.unique_ch_b - len(self.unique_chars), s1) * (self.unique_ch_b - len(self.unique_chars)) * (s1 + 1))
-                ) * 2
-        common_space = np.sum([len(line) + 1 for line in self.add_common(self.name)])
+        padding_space = [0]
+        if self.padding:
+            n1 = self.min_size - len(self.name)
+            n2 = n1 if not self.increment else self.max_size - len(self.name)
+            if n1 > 0 or n2 > 0:
+                if n1 < 1:
+                    n1 = 1
+                for s1 in range(n1, n2 + 1):
+                    pl = math.pow(len(self.unique_chars), s1)
+                    padding_space += [(
+                        ((pl * leet_lines) * (s1 + s + 1))
+                        + (math.pow(self.unique_ch_b - len(self.unique_chars), s1) * (self.unique_ch_b - len(self.unique_chars)) * (s1 + 1))
+                    ) * 2]
+        
 
-        r = int(
-            float(s + 1)/1024.0 +
-            float(leet_lines * (s + 1))/1024.0 +
-            float((float(leet_lines)/1024.0) * (float(common_space)/1024.0))*1024.0 +
-            float(padding_space)/1024.0
-        )
+        common_space = np.sum([len(line) + 1 for line in self.add_common(self.name)])
+        r = 0
+        for ps in padding_space:
+            r += int(
+                float(s + 1)/1024.0 +
+                float(leet_lines * (s + 1))/1024.0 +
+                float((float(leet_lines)/1024.0) * (float(common_space)/1024.0))*1024.0 +
+                float(ps)/1024.0
+            )
         if r < 0:
             r = 0
         return r
@@ -282,66 +297,79 @@ class WordList(CmdBase):
                     yield from self.generate(p, index + 1)
 
     def add_padding(self, word):
-        s1 = self.min_size - len(word)
-        if s1 > 0:
-            for c in list(self.permutation(self.unique_chars, s1)):
-                yield "%s%s" % (word, c)
-                yield "%s%s" % (c, word)
+        n1 = self.min_size - len(self.name)
+        n2 = n1 if not self.increment else self.max_size - len(self.name)
+        if n1 > 0 or n2 > 0:
+            if n1 < 1:
+                n1 = 1
+            for s1 in range(n1, n2 + 1):
+                for c in list(self.permutation(self.unique_chars, s1)):
+                    yield "%s%s" % (word, c)
+                    yield "%s%s" % (c, word)
 
     def add_common(self, word):
 
         year = datetime.datetime.now().year
         y2 = int(str(year)[2:4])
 
-        for c in COMMON:
-            if self.min_size <= len(word) + len(c) <= self.max_size:
-                yield "%s%s" % (word, c)
-                yield "%s%s" % (c, word)
+        tmp_list = []
 
-        if self.min_size <= len(word) + 1 <= self.max_size:
+        for c in COMMON:
+            if self.min_size <= len(word) + len(c):
+                tmp_list.append(self.cut("%s%s" % (word, c)))
+                tmp_list.append( "%s%s" % (c, word))
+
+        if self.min_size <= len(word) + 1:
             for s in SPECIAL:
-                yield "%s%s" % (word, s)
-                yield "%s%s" % (s, word)
+                tmp_list.append(self.cut("%s%s" % (word, s)))
+                tmp_list.append(self.cut("%s%s" % (s, word)))
 
                 for c in COMMON:
-                    if self.min_size <= len(word) + 1 + len(c) <= self.max_size:
-                        yield "%s%s%s" % (word, s, c)
-                        yield "%s%s%s" % (c, s, word)
+                    if self.min_size <= len(word) + 1 + len(c):
+                        tmp_list.append(self.cut("%s%s%s" % (word, s, c)))
+                        tmp_list.append(self.cut("%s%s%s" % (c, s, word)))
                         if not self.small and self.level >= 2:
-                            yield "%s%s%s" % (word, c, s)
-                            yield "%s%s%s" % (s, c, word)
+                            tmp_list.append(self.cut("%s%s%s" % (word, c, s)))
+                            tmp_list.append(self.cut("%s%s%s" % (s, c, word)))
 
-        if self.min_size <= len(word) + 3 <= self.max_size:
+        if self.min_size <= len(word) + 3:
             for n in range(0, y2 + 15):
-                yield "%s%s" % (word, n)
-                yield "%s%s" % (n, word)
+                tmp_list.append(self.cut("%s%s" % (word, n)))
+                tmp_list.append(self.cut("%s%s" % (n, word)))
                 for s in SPECIAL:
-                    yield "%s%s%s" % (word, s, n)
-                    yield "%s%s%s" % (n, s, word)
-                    yield "%s%s%02d" % (word, s, n)
-                    yield "%02d%s%s" % (n, s, word)
+                    tmp_list.append(self.cut("%s%s%s" % (word, s, n)))
+                    tmp_list.append(self.cut("%s%s%s" % (n, s, word)))
+                    tmp_list.append( self.cut("%s%s%02d" % (word, s, n)))
+                    tmp_list.append( self.cut("%02d%s%s" % (n, s, word)))
 
                     if not self.small and self.level >= 3:
-                        yield "%s%s%s" % (word, n, s)
-                        yield "%s%s%s" % (s, n, word)
-                        yield "%s%02d%s" % (word, n, s)
-                        yield "%s%02d%s" % (s, n, word)
+                        tmp_list.append( self.cut("%s%s%s" % (word, n, s)))
+                        tmp_list.append( self.cut("%s%s%s" % (s, n, word)))
+                        tmp_list.append( self.cut("%s%02d%s" % (word, n, s)))
+                        tmp_list.append( self.cut("%s%02d%s" % (s, n, word)))
 
-        if self.min_size <= len(word) + 5 <= self.max_size:
+        if self.min_size <= len(word) + 5:
             for n in range(year - 15, year + 15):
-                yield "%s%s" % (word, n)
-                yield "%s%s" % (n, word)
+                tmp_list.append( self.cut("%s%s" % (word, n)))
+                tmp_list.append( self.cut("%s%s" % (n, word)))
                 for s in SPECIAL:
-                    yield "%s%s%s" % (word, s, n)
-                    yield "%s%s%s" % (n, s, word)
-                    yield "%s%s%04d" % (word, s, n)
-                    yield "%04d%s%s" % (n, s, word)
+                    tmp_list.append( self.cut("%s%s%s" % (word, s, n)))
+                    tmp_list.append( self.cut("%s%s%s" % (n, s, word)))
+                    tmp_list.append( self.cut("%s%s%04d" % (word, s, n)))
+                    tmp_list.append( self.cut("%04d%s%s" % (n, s, word)))
 
                     if not self.small and self.level >= 3:
-                        yield "%s%s%s" % (word, n, s)
-                        yield "%s%s%s" % (s, n, word)
-                        yield "%s%04d%s" % (word, n, s)
-                        yield "%s%04d%s" % (s, n, word)
+                        tmp_list.append( self.cut("%s%s%s" % (word, n, s)))
+                        tmp_list.append( self.cut("%s%s%s" % (s, n, word)))
+                        tmp_list.append( self.cut("%s%04d%s" % (word, n, s)))
+                        tmp_list.append( self.cut("%s%04d%s" % (s, n, word)))
+
+        yield from set(tmp_list)
+
+    def cut(self, word) -> str:
+        if len(word) <= self.max_size:
+            return word
+        return word[:self.max_size]
 
     def permutation(self, char_space: list, size: int) -> list:
         if size <= 0:
