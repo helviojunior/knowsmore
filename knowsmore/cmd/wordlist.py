@@ -287,7 +287,7 @@ class WordList(CmdBase):
             for i, s in enumerate(self.char_space.get(c)):
                 if index == len(word) - 1:
                     p = "%s%s" % (word[0:index], s)
-                    if len(p) < self.min_size and self.padding:
+                    if (len(p) < self.min_size or self.increment) and self.padding:
                         yield from self.add_padding(p)
                     else:
                         yield p
