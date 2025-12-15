@@ -268,6 +268,8 @@ class WordList(CmdBase):
             )
         if r < 0:
             r = 0
+        if self.level == 1:
+            r = r * 2
         return r
 
     def generate(self, word, index) -> list:
@@ -294,6 +296,25 @@ class WordList(CmdBase):
                 else:
                     p = "%s%s%s" % (word[0:index], s, word[index + 1:])
                     yield from self.generate(p, index + 1)
+
+            # Generate the inverse of the first char (in general the uppercase)
+            if self.level == 1 and index == 0:
+                ci = ""
+                if c == c.upper():
+                    ci = c.lower()
+                elif c == c.lower():
+                    ci = c.upper()
+                if ci != "":
+                    if index == len(word) - 1:
+                        p = "%s%s" % (word[0:index], ci)
+                        if (len(p) < self.min_size or self.increment) and self.padding:
+                            yield from self.add_padding(p)
+                        yield p
+                        yield from self.add_common(p)
+                    else:
+                        p = "%s%s%s" % (word[0:index], ci, word[index + 1:])
+                        yield from self.generate(p, index + 1)
+
 
     def add_padding(self, word):
         n1 = self.min_size - len(self.name)

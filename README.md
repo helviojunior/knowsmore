@@ -23,6 +23,16 @@ KnowsMore officially supports Python 3.8+.
 * [x] Export all cracked credentials direct to BloodHound Neo4j Database as 'owned object'
 * [x] Other amazing features...
 
+
+## Generating a custom wordlist
+
+```bash
+knowsmore.py --word-list -o wl.txt --batch --name companyname
+knowsmore.py --word-list -o wl.txt --batch --name companyname -l 1
+```
+
+> Note: `-l` parameter indicate the leets char space, where 1 is no leet and 3 is the maximum leet available.
+
 ## Getting stats
 
 ```bash
