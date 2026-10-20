@@ -18,7 +18,15 @@ git commit -m "Update build version"
 import os
 import sys
 
-from setuptools import setup, find_packages
+try:
+    from setuptools import setup, find_packages
+except ImportError:
+    # Python 3.12+ no longer ships setuptools in fresh environments.
+    # Bootstrap it so that `python setup.py sdist` keeps working.
+    import subprocess
+
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "setuptools", "wheel"])
+    from setuptools import setup, find_packages
 
 meta = {}
 here = os.path.abspath(os.path.dirname(__file__))
