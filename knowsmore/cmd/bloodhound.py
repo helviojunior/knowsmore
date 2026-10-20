@@ -890,7 +890,7 @@ class Bloodhound(CmdBase):
 
         unsupported = [
             f for f in files
-            if f.version != 4 and f.version != 5
+            if f.version != 4 and f.version != 5 and f.version != 6
         ]
         if len(unsupported) > 0:
             Logger.pl('{!} {R}error: Unsupported BloodHound Version:{W}')
