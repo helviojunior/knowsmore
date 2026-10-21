@@ -34,6 +34,81 @@ here = os.path.abspath(os.path.dirname(__file__))
 with open(f"{here}/knowsmore/__meta__.py") as f:
     exec(f.read(), meta)
 
+# When building a local/unreleased copy (version still 0.0.0), stamp a unique
+# development version derived from the current timestamp and git commit, so that
+# `pipx install --force .` produces a distinguishable build that is visible in
+# the runtime banner. Released builds set a real __version__ and are left as is.
+if str(meta.get("__version__", "0.0.0")).strip() == "0.0.0":
+    import re
+
+    version_file = f"{here}/VERSION"
+
+    if os.path.isfile(version_file):
+        # Reuse the version already computed for this build. A single source of
+        # truth keeps every setup.py invocation of the same build (metadata step,
+        # wheel step, ...) consistent; otherwise a per-call timestamp produces
+        # mismatching wheel names and the build fails.
+        with open(version_file, "r", encoding="utf-8") as f:
+            dev_version = f.read().strip()
+    else:
+        import time
+        import subprocess
+
+        ts = int(time.time())
+        try:
+            git_hash = subprocess.check_output(
+                ["git", "rev-parse", "--short=8", "HEAD"],
+                cwd=here, stderr=subprocess.DEVNULL
+            ).decode().strip()
+        except Exception:
+            git_hash = None
+
+        # PEP 440 compliant local dev version, e.g. 0.0.0.dev1760970000+g1a2b3c4d
+        dev_version = "0.0.0.dev%d" % ts + ("+g%s" % git_hash if git_hash else "")
+
+        with open(version_file, "w", encoding="utf-8") as f:
+            f.write(dev_version)
+
+    if dev_version:
+        meta["__version__"] = dev_version
+
+        # Persist it into the packaged __meta__.py so the installed CLI banner
+        # reports the same build. With pipx / PEP 517 isolated builds this edits
+        # the temporary build copy; for a non-isolated build it edits the working
+        # tree, so the original file is restored on exit, once the build has
+        # already read and packaged the stamped version.
+        meta_path = f"{here}/knowsmore/__meta__.py"
+        try:
+            with open(meta_path, "r", encoding="utf-8") as f:
+                original_meta_src = f.read()
+
+            patched_meta_src = re.sub(
+                r"^__version__\s*=.*$",
+                "__version__ = '%s'" % dev_version,
+                original_meta_src,
+                count=1,
+                flags=re.MULTILINE,
+            )
+            with open(meta_path, "w", encoding="utf-8") as f:
+                f.write(patched_meta_src)
+
+            # Roll back the __meta__.py change (back to version 0.0.0) when the
+            # build process exits, leaving the working tree unchanged. The VERSION
+            # file is intentionally kept so the build's remaining steps reuse it;
+            # delete it to force a fresh build stamp on the next install.
+            import atexit
+
+            def _restore_meta(path=meta_path, content=original_meta_src):
+                try:
+                    with open(path, "w", encoding="utf-8") as fh:
+                        fh.write(content)
+                except OSError:
+                    pass
+
+            atexit.register(_restore_meta)
+        except OSError:
+            pass
+
 with open(f"{here}/requirements.txt", "r", encoding="utf-8") as f:
     requires = f.read().splitlines()
     if not requires:

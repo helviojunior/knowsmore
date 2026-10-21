@@ -31,6 +31,7 @@ class JsonExport(CmdBase):
     url_path = '/services/collector/event'
     token_base = None
     cracked_only = False
+    enabled_only = False
     include_password = False
     out_file = ''
 
@@ -49,6 +50,12 @@ class JsonExport(CmdBase):
                            default=False,
                            dest=f'cracked_only',
                            help=Color.s('Integrate cracked data only. (default: False)'))
+
+        flags.add_argument('--enabled-only',
+                           action='store_true',
+                           default=False,
+                           dest=f'enabled_only',
+                           help=Color.s('Integrate enabled credentials only. (default: False)'))
 
     def add_commands(self, cmds: _ArgumentGroup):
         cmds.add_argument('-o',
@@ -80,18 +87,20 @@ class JsonExport(CmdBase):
             raise e
 
         self.cracked_only = args.cracked_only
+        self.enabled_only = args.enabled_only
         self.include_password = args.include_password
         self.out_file = os.path.abspath(args.out_file.strip())
 
         Logger.pl('     {C}file:{O} %s{W}' % str(self.out_file))
         Logger.pl('     {C}cracked only:{O} %s{W}' % self.cracked_only)
+        Logger.pl('     {C}enabled only:{O} %s{W}' % self.enabled_only)
         Logger.pl('     {C}include clear text passwords:{O} %s{W}' % self.include_password)
 
         return True
 
     def run(self):
 
-        total = self.db.get_data_len(cracked_only=self.cracked_only)
+        total = self.db.get_data_len(cracked_only=self.cracked_only, enabled_only=self.enabled_only)
         count = 0
         with open(str(self.out_file), 'wb') as f:
             f.write('['.encode("UTF-8"))
@@ -99,7 +108,8 @@ class JsonExport(CmdBase):
                 try:
                     for entry in self.db.get_data(
                             export_password=self.include_password,
-                            cracked_only=self.cracked_only):
+                            cracked_only=self.cracked_only,
+                            enabled_only=self.enabled_only):
                         count += 1
 
                         if count > total:

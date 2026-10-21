@@ -40,7 +40,7 @@ class PreComputed(CmdBase):
 
         if not os.path.isfile(args.pwd_file):
             Logger.pl('{!} {R}error: Filename is invalid {O}%s{R} {W}\r\n' % (
-                args.ntlmfile))
+                args.pwd_file))
             Tools.exit_gracefully(1)
 
         try:

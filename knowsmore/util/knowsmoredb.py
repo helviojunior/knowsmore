@@ -241,6 +241,61 @@ class KnowsMoreDB(Database):
             self.pe(e)
         pass
 
+    def reconcile_bloodhound_authority(self) -> int:
+        # BloodHound is the authoritative source for account metadata.
+        # Credentials imported from an NTDS/secretsdump often could not be
+        # matched to a BloodHound object (they end up with an empty
+        # object_identifier and a default enabled flag). Here we match those
+        # credentials to their BloodHound object by samAccountName and bring
+        # the authoritative 'enabled' flag and 'pwd_last_set' from BloodHound.
+        updated = 0
+        try:
+            conn = self.connect_to_db()
+            cur = conn.cursor()
+
+            # Build an indexed samAccountName -> authoritative map once.
+            cur.execute('DROP TABLE IF EXISTS _bh_authority')
+            cur.execute(
+                "CREATE TEMP TABLE _bh_authority AS "
+                "SELECT lower(json_extract(props, '$.samaccountname')) AS sam, "
+                "       json_extract(props, '$.enabled') AS enabled, "
+                "       json_extract(props, '$.pwdlastset') AS pwdlastset "
+                "FROM bloodhound_objects "
+                "WHERE object_label IN ('User', 'Computer') "
+                "  AND json_extract(props, '$.samaccountname') IS NOT NULL "
+                "  AND json_extract(props, '$.samaccountname') != '' "
+                "GROUP BY sam"
+            )
+            cur.execute('CREATE INDEX _bh_authority_sam ON _bh_authority(sam)')
+
+            # Reconcile the 'enabled' flag (authoritative from BloodHound).
+            cur.execute(
+                "UPDATE credentials "
+                "SET enabled = (SELECT b.enabled FROM _bh_authority b "
+                "               WHERE b.sam = lower(credentials.name)) "
+                "WHERE (object_identifier IS NULL OR object_identifier = '') "
+                "  AND lower(name) IN (SELECT sam FROM _bh_authority WHERE enabled IS NOT NULL)"
+            )
+            updated = cur.rowcount if cur.rowcount is not None else 0
+
+            # Backfill pwd_last_set from BloodHound when available.
+            cur.execute(
+                "UPDATE credentials "
+                "SET pwd_last_set = datetime((SELECT b.pwdlastset FROM _bh_authority b "
+                "                             WHERE b.sam = lower(credentials.name)), 'unixepoch', 'localtime') "
+                "WHERE (object_identifier IS NULL OR object_identifier = '') "
+                "  AND lower(name) IN (SELECT sam FROM _bh_authority "
+                "                      WHERE pwdlastset IS NOT NULL AND pwdlastset > 0)"
+            )
+
+            cur.execute('DROP TABLE IF EXISTS _bh_authority')
+            conn.commit()
+        except Exception as e:
+            Color.pl('{!} {R}Error reconciling BloodHound authority:{O} %s{W}' % str(e))
+            self.pe(e)
+
+        return updated
+
     def insert_or_get_domain(self, domain: str, dn: str = '', object_identifier: str = '') -> int:
 
         if domain is None or domain.strip() == '':

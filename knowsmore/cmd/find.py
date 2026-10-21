@@ -26,6 +26,7 @@ class Find(CmdBase):
     find_text = ''
     out_file = None
     cracked_only = False
+    enabled_only = False
     json_format = False
     find_type = FindMode.All
 
@@ -45,6 +46,12 @@ class Find(CmdBase):
                            default=False,
                            dest=f'cracked_only',
                            help=Color.s('Find cracked data only'))
+
+        flags.add_argument('--enabled-only',
+                           action='store_true',
+                           default=False,
+                           dest=f'enabled_only',
+                           help=Color.s('Find enabled credentials only'))
 
         flags.add_argument('--json',
                            action='store_true',
@@ -91,11 +98,13 @@ class Find(CmdBase):
 
         self.db = self.open_db(args)
         self.cracked_only = args.cracked_only
+        self.enabled_only = args.enabled_only
         self.json_format = args.json_format
 
         Logger.pl('     {C}find mode:{O} %s{W}' % str(self.find_type.name))
         Logger.pl('     {C}find text:{O} %s{W}' % self.find_text)
         Logger.pl('     {C}cracked only:{O} %s{W}' % self.cracked_only)
+        Logger.pl('     {C}enabled only:{O} %s{W}' % self.enabled_only)
 
         return True
 
@@ -136,6 +145,9 @@ class Find(CmdBase):
 
         if self.cracked_only:
             sql += ' and (p.length > 0) '
+
+        if self.enabled_only:
+            sql += ' and (c.enabled = 1) '
 
         sql += ' order by c.name'
 

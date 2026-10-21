@@ -21,6 +21,7 @@ KnowsMore officially supports Python 3.8+.
 * [x] Analyse similarity of password with company and user name
 * [x] Search for users, passwords and hashes
 * [x] Export all cracked credentials direct to BloodHound Neo4j Database as 'owned object'
+* [x] Mark cracked credentials as 'owned' in BloodHound Community Edition (CE) via REST API
 * [x] Other amazing features...
 
 
@@ -265,7 +266,23 @@ knowsmore --user-pass --username administrator --password Sec4US@2023
 knowsmore --user-pass --username administrator --password Sec4US@2023 --company sec4us
 ```
 
-Integrate all credentials cracked to Neo4j Bloodhound database
+Integrate all credentials cracked as `owned` objects into BloodHound.
+
+### BloodHound Community Edition (recommended)
+
+On BloodHound CE (v5+), marking objects as owned by writing directly to Neo4j is **not supported** and is wiped on the next *Graph Analysis*. Instead, KnowsMore marks owned through the official BloodHound CE REST API, which is persistent.
+
+First generate an API token in BloodHound CE at **Administration → API Tokens**, then:
+
+```bash
+knowsmore --bloodhound --mark-owned-ce http://localhost:8080 --bh-token-id <TOKEN_ID> --bh-token-key <TOKEN_KEY>
+```
+
+After running it, trigger a new **Graph Analysis** in BloodHound CE (or wait for the scheduled one) so the `Owned` tag takes effect.
+
+**Note:** add `--bh-no-tls-verify` when your BloodHound CE instance uses a self-signed HTTPS certificate.
+
+### BloodHound Legacy (Neo4j)
 
 ```bash
 knowsmore --bloodhound --mark-owned 10.10.10.10 -d neo4j -u neo4j -p 123456

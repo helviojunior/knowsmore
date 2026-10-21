@@ -21,6 +21,8 @@
 #*.tar
 *.zip
 *.restore
+VERSION
+
 
 # Logs and databases #
 ######################

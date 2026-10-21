@@ -29,6 +29,7 @@ import warnings
 from knowsmore.cmdbase import CmdBase
 from knowsmore.config import Configuration
 from knowsmore.libs.bloodhoundsync import BloodhoundSync
+from knowsmore.libs.bloodhoundce import BloodHoundCEApi, BloodHoundCEError
 from knowsmore.password import Password
 from knowsmore.util.color import Color
 from knowsmore.util.database import Database
@@ -44,6 +45,7 @@ class Bloodhound(CmdBase):
         Import = 1
         MarkOwned = 2
         Sync = 3
+        MarkOwnedCE = 4
 
     filename = ''
     db = None
@@ -53,6 +55,7 @@ class Bloodhound(CmdBase):
     synced = []
     tasks = 6
     force = False
+    bh_api = None
 
     class BloodhoundFile:
         file_name = None
@@ -192,10 +195,28 @@ class Bloodhound(CmdBase):
 
         @staticmethod
         def _set_owned(tx: Transaction, source_filter_type: str, source_label: str, source: str, owned: bool = True):
-            query = 'UNWIND $props AS prop MATCH (n:Base {{{0}: prop.objectid}}) SET n:{1} SET n += prop.map RETURN n.name as name, n.owned as owned LIMIT 1'
+            # BloodHound Legacy (v4) marks owned objects through the 'owned' property.
+            # BloodHound CE (v5/v6) uses the 'system_tags' property and the 'Tag_Owned' label.
+            # Set both so the result is recognized regardless of the BloodHound version.
+            #
+            # 'system_tags' is a space separated list, so preserve any pre-existing
+            # tags instead of overwriting the whole property: only add/remove 'owned'.
+            if owned:
+                label_op = 'SET n:Tag_Owned'
+                tags_op = ("SET n.system_tags = CASE "
+                           "WHEN n.system_tags IS NULL OR trim(n.system_tags) = '' THEN 'owned' "
+                           "WHEN 'owned' IN split(n.system_tags, ' ') THEN n.system_tags "
+                           "ELSE trim(n.system_tags) + ' owned' END")
+            else:
+                label_op = 'REMOVE n:Tag_Owned'
+                tags_op = ("SET n.system_tags = trim(reduce(s = '', t IN "
+                           "[x IN split(coalesce(n.system_tags, ''), ' ') WHERE x <> '' AND x <> 'owned'] "
+                           "| s + ' ' + t))")
+
+            query = 'UNWIND $props AS prop MATCH (n:Base {{{0}: prop.objectid}}) SET n:{1} {2} SET n += prop.map {3} RETURN n.name as name, n.owned as owned LIMIT 1'
             #query = 'UNWIND $props AS prop MERGE (n:Base {{{0}: prop.source}}) ON MATCH SET n:{1} ON CREATE SET n:{1} SET n += prop.map RETURN n.name as name, n.owned as owned LIMIT 1'
             #query = "UNWIND $props AS prop MATCH (n:{1} {{0}: prop.source}) SET n += prop.map RETURN n.name as name, n.owned as owned LIMIT 1"\
-            query = query.format(source_filter_type, source_label)
+            query = query.format(source_filter_type, source_label, label_op, tags_op)
             result = tx.run(query,
                             props=dict(objectid=source.upper(), map=dict(owned=owned))
                             )
@@ -360,6 +381,28 @@ class Bloodhound(CmdBase):
                            dest=f'force',
                            help=Color.s('Enable group chain calculation.'))
 
+        flags.add_argument('--bh-token-id',
+                           action='store',
+                           metavar='[token id]',
+                           type=str,
+                           default='',
+                           dest=f'bh_token_id',
+                           help=Color.s('BloodHound CE API token id (used with {G}--mark-owned-ce{W}).'))
+
+        flags.add_argument('--bh-token-key',
+                           action='store',
+                           metavar='[token key]',
+                           type=str,
+                           default='',
+                           dest=f'bh_token_key',
+                           help=Color.s('BloodHound CE API token key (used with {G}--mark-owned-ce{W}).'))
+
+        flags.add_argument('--bh-no-tls-verify',
+                           action='store_true',
+                           default=False,
+                           dest=f'bh_no_tls_verify',
+                           help=Color.s('Do not verify the BloodHound CE TLS certificate.'))
+
     def add_commands(self, cmds: _ArgumentGroup):
         cmds.add_argument('--import-data',
                           action='store',
@@ -373,7 +416,14 @@ class Bloodhound(CmdBase):
                           metavar='[neo4j host and port]',
                           type=str,
                           dest=f'neo4j_host',
-                          help=Color.s('BloodHound Neo4j Database. host:port'))
+                          help=Color.s('Mark owned via Neo4j (BloodHound Legacy). host:port'))
+
+        cmds.add_argument('--mark-owned-ce',
+                          action='store',
+                          metavar='[bloodhound ce url]',
+                          type=str,
+                          dest=f'bh_url',
+                          help=Color.s('Mark owned via BloodHound CE REST API (recommended). Ex: {G}http://localhost:8080{W}'))
 
         cmds.add_argument('--sync-to',
                           action='store',
@@ -383,7 +433,29 @@ class Bloodhound(CmdBase):
                           help=Color.s('BloodHound Neo4j Database. host:port'))
 
     def load_from_arguments(self, args: Namespace) -> bool:
-        if (args.neo4j_host is not None and args.neo4j_host != '') or \
+        if args.bh_url is not None and args.bh_url.strip() != '':
+            self.mode = Bloodhound.ImportMode.MarkOwnedCE
+
+            if args.bh_token_id is None or args.bh_token_id.strip() == '' \
+                    or args.bh_token_key is None or args.bh_token_key.strip() == '':
+                Logger.pl('{!} {R}error: {O}--mark-owned-ce{R} requires {O}--bh-token-id{R} and {O}--bh-token-key{R}{W}\r\n')
+                Tools.exit_gracefully(1)
+
+            self.bh_api = BloodHoundCEApi(
+                base_url=args.bh_url.strip(),
+                token_id=args.bh_token_id.strip(),
+                token_key=args.bh_token_key.strip(),
+                verify_tls=not args.bh_no_tls_verify,
+            )
+
+            try:
+                self.bh_api.test_connection()
+            except BloodHoundCEError as e:
+                Logger.pl('{!} {R}error: Fail to connect with BloodHound CE API: {O}%s{R} {W}\r\n' % (
+                    e))
+                Tools.exit_gracefully(1)
+
+        elif (args.neo4j_host is not None and args.neo4j_host != '') or \
                 (args.neo4j_host2 is not None and args.neo4j_host2 != ''):
 
             host = args.neo4j_host
@@ -447,7 +519,7 @@ class Bloodhound(CmdBase):
             self.mode = Bloodhound.ImportMode.Import
 
         if self.mode == Bloodhound.ImportMode.Undefined:
-            Logger.pl('{!} {R}error: Nor {O}--import-data{R} or {O}--mark-owned{R} was provided{W}\r\n')
+            Logger.pl('{!} {R}error: Nor {O}--import-data{R}, {O}--mark-owned{R} or {O}--mark-owned-ce{R} was provided{W}\r\n')
             Tools.exit_gracefully(1)
 
         if args.tasks >= 1:
@@ -584,10 +656,103 @@ class Bloodhound(CmdBase):
         else:
             Color.pl('{!} {O}Has none owned objects{W}')
 
+    def mark_owned_ce(self):
+        Color.pl('{?} {W}{D}Marking owned objects via BloodHound CE API...{W}')
+
+        try:
+            tag_id = self.bh_api.get_owned_tag_id()
+        except BloodHoundCEError as e:
+            Logger.pl('{!} {R}error: %s{W}\r\n' % str(e))
+            Tools.exit_gracefully(1)
+            return
+
+        db_cracked = self.db.select_raw(
+            sql='select c.name, d.name as domain_name, c.type, c.object_identifier from credentials as c '
+                'inner join passwords as p '
+                'on c.password_id  = p.password_id  '
+                'inner join domains as d '
+                'on c.domain_id = d.domain_id  '
+                'where p.password <> ""',
+            args=[]
+        )
+
+        if len(db_cracked) == 0:
+            Color.pl('{!} {O}Has none owned objects{W}')
+            return
+
+        # Pre-load the existing selector names to avoid creating duplicates on re-runs.
+        try:
+            existing = self.bh_api.get_selector_names(tag_id)
+        except BloodHoundCEError:
+            existing = set()
+
+        marked = skipped = failed = 0
+
+        with progress.Bar(label=" Marking as owned ", expected_size=len(db_cracked)) as bar:
+            try:
+                for idx, row in enumerate(db_cracked):
+                    bar.show(idx)
+
+                    kind = 'Computer' if row['type'] == "M" else 'User'
+                    sam = (row['name'] or '').strip()
+
+                    # The stored object_identifier (SID) is the most reliable seed;
+                    # the display name is only a label for the selector.
+                    objectid = (row['object_identifier'] or '').strip()
+                    display = sam.upper()
+
+                    if objectid == '':
+                        # Fall back to resolving the node by samAccountName/hostname,
+                        # since the database domain is a UPN/e-mail suffix and will
+                        # not match the Active Directory domain used by BloodHound.
+                        node = self.bh_api.search_node(sam, kind)
+                        if node is not None:
+                            objectid = (node.get('objectid') or '').strip()
+                            if node.get('name'):
+                                display = str(node.get('name')).upper()
+
+                    if objectid == '':
+                        failed += 1
+                        if Configuration.verbose >= 2:
+                            Tools.clear_line()
+                            Color.pl('{!} {O}could not resolve object id for %s (%s){W}' % (sam, kind))
+                        continue
+
+                    objectid = objectid.upper()
+
+                    if display in existing:
+                        skipped += 1
+                        continue
+
+                    try:
+                        self.bh_api.add_owned_selector(tag_id, name=display, objectid=objectid)
+                        existing.add(display)
+                        marked += 1
+                    except BloodHoundCEError as e:
+                        failed += 1
+                        if Configuration.verbose >= 2:
+                            Tools.clear_line()
+                            Color.pl('{!} {O}%s{W}' % str(e))
+
+            except KeyboardInterrupt as e:
+                raise e
+            finally:
+                bar.hide = True
+                Tools.clear_line()
+
+        Color.pl('{+} {C}Owned marking finished: {O}%d{C} marked, {O}%d{C} skipped, {O}%d{C} failed{W}' % (
+            marked, skipped, failed))
+        Color.pl('{*} {W}{D}Run a new "Graph Analysis" in BloodHound CE (or wait for the scheduled one) '
+                 'for the Owned tag to take effect.{W}')
+
     def run(self):
 
         # Disable warning logs of neo4j driver
         logging.getLogger().setLevel(logging.DEBUG)
+
+        if self.mode == Bloodhound.ImportMode.MarkOwnedCE:
+            self.mark_owned_ce()
+            return
 
         if self.mode == Bloodhound.ImportMode.MarkOwned:
             try:
@@ -884,6 +1049,13 @@ class Bloodhound(CmdBase):
 
                 Color.pl('{+} {W}Imported objects{W}')
                 Color.pl('{W}{D}%s{W}' % Tools.get_tabulated(imported))
+
+                # BloodHound is the authoritative source: reconcile the
+                # 'enabled' flag and pwd_last_set of credentials imported
+                # without a SID (e.g. from NTDS/secretsdump) by samAccountName.
+                Color.pl('{?} {W}{D}Reconciling credentials with BloodHound authority...{W}')
+                reconciled = self.db.reconcile_bloodhound_authority()
+                Color.pl('{+} {O}%s{W}{C} credential(s) reconciled from BloodHound{W}' % reconciled)
 
 
     def parse_files(self, files):
